@@ -12,7 +12,10 @@ def get_uapi_obj_list(jamf_url, object_type, token, verbosity):
     url = jamf_url + "/" + api_objects.api_endpoints(object_type) + "?page=0&page-size=1000&sort=id%3Adesc"
     r = curl.request("GET", url, token, verbosity)
     if r.status_code == 200:
-        output = json.loads(r.output)
+        try:
+            output = json.loads(json.dumps(r.output))
+        except TypeError:
+            output = json.loads(r.output)
         obj = output["results"]
         if verbosity > 2:
             print("\nAPI object list:")
@@ -25,12 +28,11 @@ def get_uapi_obj_from_id(jamf_url, object_type, obj_id, token, verbosity):
     url = jamf_url + "/" + api_objects.api_endpoints(object_type) + "/" + obj_id
     r = curl.request("GET", url, token, verbosity)
     if r.status_code == 200:
-        output = json.loads(r.output)
-        obj = output["results"]
+        output = json.loads(json.dumps(r.output))
         if verbosity > 2:
-            print("\nAPI object list:")
-            print(obj)
-        return obj
+            print("\nAPI output:")
+            print(output)
+        return output
 
 
 def get_uapi_obj_id_from_name(jamf_url, object_type, object_name, token, verbosity):
@@ -80,11 +82,10 @@ def get_api_obj_from_id(jamf_url, object_type, obj_id, token, verbosity):
     r = curl.request("GET", url, token, verbosity)
     if r.status_code == 200:
         output = json.loads(r.output)
-        obj = output["results"]
         if verbosity > 2:
-            print("\nAPI object list:")
-            print(obj)
-        return obj
+            print("\nAPI object:")
+            print(output)
+        return output
 
 
 def get_api_obj_id_from_name(jamf_url, object_type, object_name, token, verbosity):
@@ -381,6 +382,40 @@ def get_criteria_in_computer_groups(jamf_url, token, verbosity):
         return criteria_in_computer_groups
 
 
+def get_criteria_in_ios_groups(jamf_url, token, verbosity):
+    """get a list of all criteria in all smart groups"""
+
+    # get all smart groups
+    ios_groups = get_api_obj_list(jamf_url, "mobile_device_group", token, verbosity)
+
+    # get all EA objects from iOS groups and add to a list
+    if ios_groups:
+        # define a new list
+        criteria_in_ios_groups = []
+        print(
+            "Please wait while we gather a list of all criteria in all computer groups "
+            f"(total {len(ios_groups)})..."
+        )
+        for ios_group in ios_groups:
+            generic_info = get_api_obj_value_from_id(
+                jamf_url,
+                "mobile_device_group",
+                ios_groups["id"],
+                "",
+                token,
+                verbosity,
+            )
+            try:
+                criteria = generic_info["criteria"]
+                for x in criteria:
+                    criterion = x["name"]
+                    if criterion not in criteria_in_ios_groups:
+                        criteria_in_ios_groups.append(criterion)
+            except IndexError:
+                pass
+        return criteria_in_ios_groups
+
+
 def get_names_in_advanced_searches(jamf_url, token, verbosity):
     """get a list of all criteria and display fields in all advanced searches.
     Note it's not possible to discern EAs from other criteria with this method."""
@@ -389,8 +424,6 @@ def get_names_in_advanced_searches(jamf_url, token, verbosity):
     advanced_searches = get_api_obj_list(
         jamf_url, "advanced_computer_search", token, verbosity
     )
-
-    # get all EA objects from computer groups and add to a list
     if advanced_searches:
         # define a new list
         names_in_advanced_searches = []
@@ -402,6 +435,49 @@ def get_names_in_advanced_searches(jamf_url, token, verbosity):
             generic_info = get_api_obj_value_from_id(
                 jamf_url,
                 "advanced_computer_search",
+                advanced_search["id"],
+                "",
+                token,
+                verbosity,
+            )
+            try:
+                criteria = generic_info["criteria"]
+                for x in criteria:
+                    criterion = x["name"]
+                    if criterion not in names_in_advanced_searches:
+                        names_in_advanced_searches.append(criterion)
+            except IndexError:
+                pass
+            try:
+                fields = generic_info["display_fields"]
+                for x in fields:
+                    field = x["name"]
+                    if field not in names_in_advanced_searches:
+                        names_in_advanced_searches.append(field)
+            except IndexError:
+                pass
+        return names_in_advanced_searches
+
+
+def get_names_in_ios_advanced_searches(jamf_url, token, verbosity):
+    """get a list of all criteria and display fields in all advanced searches.
+    Note it's not possible to discern EAs from other criteria with this method."""
+
+    # get all advanced searches
+    advanced_searches = get_api_obj_list(
+        jamf_url, "advanced_mobile_device_search", token, verbosity
+    )
+    if advanced_searches:
+        # define a new list
+        names_in_advanced_searches = []
+        print(
+            "Please wait while we gather a list of all criteria in all ios groups "
+            f"(total {len(advanced_searches)})..."
+        )
+        for advanced_search in advanced_searches:
+            generic_info = get_api_obj_value_from_id(
+                jamf_url,
+                "advanced_mobile_device_search",
                 advanced_search["id"],
                 "",
                 token,
@@ -484,6 +560,47 @@ def get_groups_in_api_objs(jamf_url, token, obj_type, verbosity):
                 try:
                     # excluded groups
                     groups = generic_info["scope"]["exclusions"]["computer_groups"]
+                    for x in groups:
+                        group = x["name"]
+                        if group not in groups_in_api_objects:
+                            groups_in_api_objects.append(group)
+                except IndexError:
+                    pass
+        return groups_in_api_objects
+
+
+def get_groups_in_ios_api_objs(jamf_url, token, obj_type, verbosity):
+    """get a list of all groups in all of a particular object type (targets or exclusions).
+    Valid object types are: mobile_device_application, configuration_profile"""
+
+    # get all objects
+    api_objects = get_api_obj_list(jamf_url, obj_type, token, verbosity)
+
+    # get all groups from objeects and add to a list
+    if api_objects:
+        # define a new list
+        groups_in_api_objects = []
+        print(
+            f"Please wait while we gather a list of all groups in {obj_type} objects "
+            f"(total {len(api_objects)})..."
+        )
+        for obj in api_objects:
+            generic_info = get_api_obj_value_from_id(
+                jamf_url, obj_type, obj["id"], "", token, verbosity
+            )
+            if generic_info["scope"]["all_mobile_devices"] != "true":
+                try:
+                    # targetted groups
+                    groups = generic_info["scope"]["mobile_device_groups"]
+                    for x in groups:
+                        group = x["name"]
+                        if group not in groups_in_api_objects:
+                            groups_in_api_objects.append(group)
+                except IndexError:
+                    pass
+                try:
+                    # excluded groups
+                    groups = generic_info["scope"]["exclusions"]["mobile_device_groups"]
                     for x in groups:
                         group = x["name"]
                         if group not in groups_in_api_objects:

@@ -5,6 +5,7 @@ def api_endpoints(object_type):
     api_endpoints = {
         "account": "JSSResource/accounts",
         "advanced_computer_search": "JSSResource/advancedcomputersearches",
+        "advanced_mobile_device_search": "JSSResource/advancedmobiledevicesearches",
         "category": "api/v1/categories",
         "extension_attribute": "JSSResource/computerextensionattributes",
         "computer_group": "JSSResource/computergroups",
@@ -19,6 +20,7 @@ def api_endpoints(object_type):
         "logflush": "JSSResource/logflush",
         "ldap_server": "JSSResource/ldapservers",
         "mac_application": "JSSResource/macapplications",
+        "mobile_device_application": "JSSResource/mobiledeviceapplications",
         "mobile_device_group": "JSSResource/mobiledevicegroups",
         "package": "JSSResource/packages",
         "package_upload": "dbfileupload",
@@ -42,11 +44,14 @@ def object_types(object_type):
     # we could make this shorter with some regex but I think this way is clearer
     object_types = {
         "advanced_computer_search": "advancedcomputersearches",
+        "advanced_mobile_device_search": "advancedmobiledevicesearches",
         "category": "categories",
         "computer": "computers",
         "computer_group": "computergroups",
         "extension_attribute": "computerextensionattributes",
         "mac_application": "macapplications",
+        "mobile_device_application": "mobiledeviceapplications",
+        "mobile_device_group": "mobiledevicegroups",
         "os_x_configuration_profile": "osxconfigurationprofiles",
         "package": "packages",
         "patch_policy": "patchpolicies",
@@ -64,11 +69,15 @@ def object_list_types(object_type):
     # of all objects we could make this shorter with some regex but I think this way is clearer
     object_list_types = {
         "advanced_computer_search": "advanced_computer_searches",
+        "advanced_mobile_device_search": "advanced_mobile_device_searches",
         "category": "categories",
         "computer": "computers",
         "computer_group": "computer_groups",
+        "configuration_profile": "configuration_profiles",
         "extension_attribute": "computer_extension_attributes",
         "mac_application": "mac_applications",
+        "mobile_device_application": "mobile_device_applications",
+        "mobile_device_group": "mobile_device_groups",
         "os_x_configuration_profile": "os_x_configuration_profiles",
         "package": "packages",
         "patch_policy": "patch_policies",
