@@ -4,7 +4,8 @@
 ** Jamf API Tool: List, search and clean policies and computer objects
 
 Credentials can be supplied from the command line as arguments, or inputted, or
-from an existing PLIST containing values for JSS_URL, API_USERNAME and API_PASSWORD,
+from an existing PLIST containing values for 
+JSS_URL, API_USERNAME and API_PASSWORD,
 for example an AutoPkg preferences file which has been configured for use with
 JSSImporter: ~/Library/Preferences/com.github.autopkg
 
@@ -14,13 +15,16 @@ For usage, run jamf_api_tool.py --help
 
 import argparse
 import getpass
+import sys
 
 from datetime import datetime
 
-from jamf_api_lib import api_connect, api_get, api_delete, api_objects, curl, actions, smb_actions
+from jamf_api_lib import (api_connect, api_get, api_delete, curl, actions,
+                          smb_actions)
 
 
-class bcolors:
+class Bcolors:
+    """Colours for print outs"""
     HEADER = "\033[95m"
     OKBLUE = "\033[94m"
     OKCYAN = "\033[96m"
@@ -33,6 +37,7 @@ class bcolors:
 
 
 def handle_computers(jamf_url, token, args, slack_webhook, verbosity):
+    """Function for handling computer lists"""
     if args.search and args.all:
         exit("syntax error: use either --search or --all, but not both")
     if not args.all:
@@ -44,7 +49,7 @@ def handle_computers(jamf_url, token, args, slack_webhook, verbosity):
     compliant = []
 
     if args.all:
-        """fill up computers []"""
+        # fill up computers
         obj = api_get.get_api_obj_list(jamf_url, "computer", token, verbosity)
 
         try:
@@ -58,14 +63,14 @@ def handle_computers(jamf_url, token, args, slack_webhook, verbosity):
         print(f"{len(computers)} computers found on {jamf_url}")
 
     for x in computers:
-        """load full computer info now"""
+        # load full computer info now
         print(f"...loading info for computer {x}")
         obj = api_get.get_api_obj_value_from_id(
             jamf_url, "computer", x, "", token, verbosity
         )
 
         if obj:
-            """this is now computer object"""
+            # this is now computer object
             try:
                 macos = obj["hardware"]["os_version"]
                 name = obj["general"]["name"]
@@ -122,34 +127,35 @@ def handle_computers(jamf_url, token, args, slack_webhook, verbosity):
             # recent_computers.remove(f"{macos} {name} dep:{dep} seen:{calc}")
 
     # query is done
-    print(bcolors.OKCYAN + "Loading complete...\n\nSummary:" + bcolors.ENDC)
+    print(Bcolors.OKCYAN + "Loading complete...\n\nSummary:" + Bcolors.ENDC)
 
     if args.os:
-        """summarise os"""
+        # summarise os
         if compliant:
             print(f"{len(compliant)} compliant and recent:")
             for x in compliant:
-                print(bcolors.OKGREEN + x + bcolors.ENDC)
+                print(Bcolors.OKGREEN + x + Bcolors.ENDC)
         if warning:
             print(f"{len(warning)} non-compliant:")
             for x in warning:
-                print(bcolors.WARNING + x + bcolors.ENDC)
+                print(Bcolors.WARNING + x + Bcolors.ENDC)
         if old_computers:
             print(f"{len(old_computers)} stale - OS version not considered:")
             for x in old_computers:
-                print(bcolors.FAIL + x + bcolors.ENDC)
+                print(Bcolors.FAIL + x + Bcolors.ENDC)
     else:
-        """regular summary"""
+        # regular summary
         print(f"{len(recent_computers)} last check-in within the past 10 days")
         for x in recent_computers:
-            print(bcolors.OKGREEN + x + bcolors.ENDC)
+            print(Bcolors.OKGREEN + x + Bcolors.ENDC)
         print(f"{len(old_computers)} stale - last check-in more than 10 days")
         for x in old_computers:
-            print(bcolors.FAIL + x + bcolors.ENDC)
+            print(Bcolors.FAIL + x + Bcolors.ENDC)
 
     if args.slack:
         # end a slack api webhook with this number
-        score = len(recent_computers) / (len(old_computers) + len(recent_computers))
+        score = (len(recent_computers) /
+                 (len(old_computers) + len(recent_computers)))
         score = f"{score:.2%}"
         slack_payload = str(
             f":hospital: update health: {score} - {len(old_computers)} "
@@ -159,7 +165,7 @@ def handle_computers(jamf_url, token, args, slack_webhook, verbosity):
 
         data = {"text": slack_payload}
         for x in old_computers:
-            print(bcolors.WARNING + x + bcolors.ENDC)
+            print(Bcolors.WARNING + x + Bcolors.ENDC)
             slack_payload += str(f"{x}\n")
 
         data = {"text": slack_payload}
@@ -169,8 +175,10 @@ def handle_computers(jamf_url, token, args, slack_webhook, verbosity):
 
 
 def handle_policies(jamf_url, token, args, verbosity):
+    """Function for handling policies"""
     # declare the csv data for export 
-    csv_fields = ['policy_id', 'policy_name', 'policy_enabled', 'policy_category', 'pkg', 'scope', 'exclusions']
+    csv_fields = ['policy_id', 'policy_name', 'policy_enabled', 
+                  'policy_category', 'pkg', 'scope', 'exclusions']
     csv_data = []
     if args.all or args.disabled:
         categories = api_get.get_uapi_obj_list(
@@ -183,9 +191,9 @@ def handle_policies(jamf_url, token, args, verbosity):
             for category in categories:
                 # loop all the categories
                 print(
-                    bcolors.OKCYAN
+                    Bcolors.OKCYAN
                     + f"category {category['id']}\t{category['name']}"
-                    + bcolors.ENDC
+                    + Bcolors.ENDC
                 )
                 policies = api_get.get_policies_in_category(
                     jamf_url, category["id"], token, verbosity
@@ -196,32 +204,41 @@ def handle_policies(jamf_url, token, args, verbosity):
                         groups = []
                         exclusion_groups = []
                         generic_info = api_get.get_api_obj_value_from_id(
-                            jamf_url, "policy", policy["id"], "", token, verbosity
+                            jamf_url, "policy", policy["id"], "", token,
+                            verbosity
                         )
                         # get scope
                         if generic_info["scope"]["all_computers"]:
                             groups = ["All Computers"]
                         else:
-                            g_count = len(generic_info["scope"]["computer_groups"])
+                            g_count = len(
+                                generic_info["scope"]["computer_groups"]
+                            )
                             for g in range(g_count):
-                                groups.append(generic_info["scope"]["computer_groups"][g]["name"])
+                                groups.append(
+                                    generic_info["scope"]["computer_groups"][g]["name"]  # noqa: E501
+                                )
                             # if len(groups) < 1:
                             #     groups = ["none"]
-                        eg_count = len(generic_info["scope"]["exclusions"]["computer_groups"])
+                        eg_count = len(
+                            generic_info["scope"]["exclusions"]["computer_groups"]  # noqa: E501
+                        )
                         for eg in range(eg_count):
-                            exclusion_groups.append(generic_info["scope"]["exclusions"]["computer_groups"][eg]["name"])
+                            exclusion_groups.append(
+                                generic_info["scope"]["exclusions"]["computer_groups"][eg]["name"]  # noqa: E501
+                            )
                         # if len(exclusion_groups) < 1:
                         #     exclusion_groups = ["none"]
                         # get enabled status
-                        if generic_info["general"]["enabled"] == True:
+                        if generic_info["general"]["enabled"] is True:
                             enabled = "true"
                         else:
                             enabled = "false"
                         # get packages
                         try:
-                            pkg = generic_info["package_configuration"]["packages"][0][
-                                "name"
-                            ]
+                            pkg = (
+                                generic_info["package_configuration"]["packages"][0]["name"]  # noqa: E501
+                            )
                         except IndexError:
                             pkg = "none"
 
@@ -229,35 +246,47 @@ def handle_policies(jamf_url, token, args, verbosity):
                         if enabled == "false":
                             disabled_policies[policy["id"]] = policy["name"]
                             if verbosity > 1:
-                                print(f"Number of disabled policies: {len(disabled_policies)}")
+                                print(
+                                    f"Number of disabled policies: {len(disabled_policies)}"  # noqa: E501
+                                )
                         do_print = 1
                         if args.disabled and enabled == "true":
                             do_print = 0
                         if do_print == 1:
                             print(
-                                bcolors.WARNING
+                                Bcolors.WARNING
                                 + f"  policy {policy['id']}"
                                 + f"\tname       : {policy['name']}\n"
-                                + bcolors.ENDC
+                                + Bcolors.ENDC
                                 + f"\t\tenabled    : {enabled}\n"
                                 + f"\t\tpkg        : {pkg}\n"
                                 + f"\t\tscope      : {groups}\n"
                                 + f"\t\texclusions : {exclusion_groups}"
                             )
-                            csv_data.append({'policy_id': policy['id'], 'policy_name': policy['name'], 'policy_category': category["name"], 'policy_enabled': enabled, 'pkg': pkg, 'scope': groups, 'exclusions': exclusion_groups})
+                            csv_data.append(
+                                {
+                                    'policy_id': policy['id'],
+                                    'policy_name': policy['name'],
+                                    'policy_category': category["name"],
+                                    'policy_enabled': enabled,
+                                    'pkg': pkg,
+                                    'scope': groups,
+                                    'exclusions': exclusion_groups
+                                }
+                            )
 
             api_connect.write_csv_file(args.csv, csv_fields, csv_data)
             print(
                 "\n"
-                + bcolors.OKGREEN
+                + Bcolors.OKGREEN
                 + f"CSV file writtten to {args.csv}"
-                + bcolors.ENDC
+                + Bcolors.ENDC
             )
 
             if args.disabled and args.delete:
                 if actions.confirm(
                     prompt=(
-                        f"\nDelete all disabled policies?"
+                        "\nDelete all disabled policies?"
                         "\n(press n to go on to confirm individually)?"
                     ),
                     default=False,
@@ -269,9 +298,9 @@ def handle_policies(jamf_url, token, args, verbosity):
                 for policy_id, policy_name in disabled_policies.items():
                     if delete_all or actions.confirm(
                         prompt=(
-                            bcolors.OKBLUE
+                            Bcolors.OKBLUE
                             + f"Delete [{policy_id}] {policy_name}?"
-                            + bcolors.ENDC
+                            + Bcolors.ENDC
                         ),
                         default=False,
                     ):
@@ -284,23 +313,26 @@ def handle_policies(jamf_url, token, args, verbosity):
 
         print(
             "\n"
-            + bcolors.OKGREEN
+            + Bcolors.OKGREEN
             + f"All policies listed above... program complete for {jamf_url}"
-            + bcolors.ENDC
+            + Bcolors.ENDC
         )
         exit
 
     elif args.search:
         query = args.search
 
-        policies = api_get.get_api_obj_list(jamf_url, "policy", token, verbosity)
+        policies = api_get.get_api_obj_list(
+            jamf_url, "policy", token, verbosity
+        )
 
         if policies:
             # targets is the new list
             targets = []
             print(
                 f"Searching {len(policies)} policy/ies on {jamf_url}:\n"
-                "To delete policies, obtain a matching query, then run with the "
+                "To delete policies, obtain a matching query, "
+                "then run with the "
                 "--delete argument"
             )
 
@@ -314,10 +346,10 @@ def handle_policies(jamf_url, token, args, verbosity):
                 print("Policies found:")
                 for target in targets:
                     print(
-                        bcolors.WARNING
+                        Bcolors.WARNING
                         + f"- policy {target['id']}"
                         + f"\tname  : {target['name']}"
-                        + bcolors.ENDC
+                        + Bcolors.ENDC
                     )
                     if args.delete:
                         api_delete.delete_api_object(
@@ -333,6 +365,7 @@ def handle_policies(jamf_url, token, args, verbosity):
 
 
 def handle_policies_in_category(jamf_url, token, args, verbosity):
+    """Function for handling policies in a specific category"""
     categories = args.category
     print(f"categories to check are:\n{categories}\nTotal: {len(categories)}")
     # now process the list of categories
@@ -340,12 +373,15 @@ def handle_policies_in_category(jamf_url, token, args, verbosity):
         category = category.replace(" ", "%20")
         # return all policies found in each category
         print(f"\nChecking '{category}' on {jamf_url}")
-        obj = api_get.get_policies_in_category(jamf_url, category, token, verbosity)
+        obj = api_get.get_policies_in_category(
+            jamf_url, category, token, verbosity
+        )
         if obj:
             if not args.delete:
                 print(
                     f"Category '{category}' exists with {len(obj)} policies: "
-                    "To delete them run this command again with the --delete flag."
+                    "To delete them run this command again "
+                    "with the --delete flag."
                 )
 
             policies_in_category = {}
@@ -355,7 +391,11 @@ def handle_policies_in_category(jamf_url, token, args, verbosity):
                 # print(f"~^~ {obj_item['id']} -~- {obj_item['name']}")
 
             for policy_id, policy_name in policies_in_category.items():
-                print(bcolors.FAIL + f"[{policy_id}] " + policy_name + bcolors.ENDC)
+                print(
+                    Bcolors.FAIL +
+                    f"[{policy_id}] " +
+                    policy_name + Bcolors.ENDC
+                )
 
             if args.delete:
                 if actions.confirm(
@@ -372,9 +412,9 @@ def handle_policies_in_category(jamf_url, token, args, verbosity):
                 for policy_id, policy_name in policies_in_category.items():
                     if delete_all or actions.confirm(
                         prompt=(
-                            bcolors.OKBLUE
+                            Bcolors.OKBLUE
                             + f"Delete [{policy_id}] {policy_name}?"
-                            + bcolors.ENDC
+                            + Bcolors.ENDC
                         ),
                         default=False,
                     ):
@@ -387,8 +427,13 @@ def handle_policies_in_category(jamf_url, token, args, verbosity):
 
 
 def handle_policy_list(jamf_url, token, args, verbosity):
+    """Function for handling a search list of policies"""
     policy_names = args.names
-    print(f"policy names to check are:\n{policy_names}\nTotal: {len(policy_names)}")
+    print(
+        "policy names to check are:\n"
+        f"{policy_names}\n"
+        f"Total: {len(policy_names)}"
+    )
 
     for policy_name in policy_names:
         print(f"\nChecking '{policy_name}' on {jamf_url}")
@@ -421,21 +466,24 @@ def handle_policy_list(jamf_url, token, args, verbosity):
 
 
 def handle_profiles(jamf_url, api_endpoint, token, args, verbosity):
+    """Function for handling profiles"""
     # declare the csv data for export 
-    csv_fields = ['profile_id', 'profile_name', 'category', 'distribution_method', 'scope', 'exclusions']
+    csv_fields = ['profile_id', 'profile_name', 'category',
+                  'distribution_method', 'scope', 'exclusions']
     csv_data = []
     if args.all:
-        profiles = api_get.get_api_obj_list(jamf_url, api_endpoint, token, verbosity)
+        profiles = api_get.get_api_obj_list(jamf_url, api_endpoint,
+                                            token, verbosity)
         if profiles:
             for profile in profiles:
                 # loop all the profiles
                 groups = []
                 exclusion_groups = []
                 print(
-                    bcolors.WARNING
+                    Bcolors.WARNING
                     + f"  profile {profile['id']}\n"
                     + f"      name     : {profile['name']}"
-                    + bcolors.ENDC
+                    + Bcolors.ENDC
                 )
                 if args.details:
                     # gather interesting info for each profile via API
@@ -447,45 +495,75 @@ def handle_profiles(jamf_url, api_endpoint, token, args, verbosity):
                     category = generic_info["general"]["category"]["name"]
                     if category and "No category assigned" not in category:
                         print(f"      category : {category}")
-                    try: # macOS
-                        distribution_method = generic_info["general"]["distribution_method"]
-                    except KeyError: # iOS
-                        distribution_method = generic_info["general"]["deployment_method"]
+                    try:  # macOS
+                        distribution_method = (
+                            generic_info["general"]["distribution_method"]
+                        )
+                    except KeyError:  # iOS
+                        distribution_method = (
+                            generic_info["general"]["deployment_method"]
+                        )
                     if distribution_method:
-                        print(f"      distribution_method : {distribution_method}")
+                        print(
+                            "      distribution_method : "
+                            f"{distribution_method}"
+                        )
                     # get scope
                     if args.macosprofiles:
                         if generic_info["scope"]["all_computers"]:
                             groups = ["All Computers"]
                         else:
-                            g_count = len(generic_info["scope"]["computer_groups"])
+                            g_count = len(
+                                generic_info["scope"]["computer_groups"]
+                            )
                             for g in range(g_count):
-                                groups.append(generic_info["scope"]["computer_groups"][g]["name"])
-                            # if len(groups) < 1:
-                            #     groups = ["none"]
-                        eg_count = len(generic_info["scope"]["exclusions"]["computer_groups"])
+                                groups.append(
+                                    generic_info["scope"]["computer_groups"][g]["name"]  # noqa: E501
+                                )
+                        eg_count = len(
+                            generic_info["scope"]["exclusions"]["computer_groups"]  # noqa: E501
+                        )
                         for eg in range(eg_count):
-                            exclusion_groups.append(generic_info["scope"]["exclusions"]["computer_groups"][eg]["name"])
+                            exclusion_groups.append(
+                                generic_info["scope"]["exclusions"]["computer_groups"][eg]["name"]  # noqa: E501
+                            )
                     else:
                         if generic_info["scope"]["all_mobile_devices"]:
                             groups = ["All Mobile Devices"]
                         else:
-                            g_count = len(generic_info["scope"]["mobile_device_groups"])
+                            g_count = len(
+                                generic_info["scope"]["mobile_device_groups"]
+                            )
                             for g in range(g_count):
-                                groups.append(generic_info["scope"]["mobile_device_groups"][g]["name"])
-                        eg_count = len(generic_info["scope"]["exclusions"]["mobile_device_groups"])
+                                groups.append(
+                                    generic_info["scope"]["mobile_device_groups"][g]["name"]  # noqa: E501
+                                )
+                        eg_count = len(
+                            generic_info["scope"]["exclusions"]["mobile_device_groups"]  # noqa: E501
+                        )
                         for eg in range(eg_count):
-                            exclusion_groups.append(generic_info["scope"]["exclusions"]["mobile_device_groups"][eg]["name"])
+                            exclusion_groups.append(
+                                generic_info["scope"]["exclusions"]["mobile_device_groups"][eg]["name"]  # noqa: E501
+                            )
 
-                    csv_data.append({'profile_id': profile['id'], 'profile_name': profile['name'], 'category': category, 'distribution_method': distribution_method, 'scope': groups, 'exclusions': exclusion_groups})
+                    csv_data.append(
+                        {
+                            'profile_id': profile['id'],
+                            'profile_name': profile['name'],
+                            'category': category,
+                            'distribution_method': distribution_method,
+                            'scope': groups,
+                            'exclusions': exclusion_groups
+                        }
+                    )
 
             if args.details:
                 api_connect.write_csv_file(args.csv, csv_fields, csv_data)
                 print(
                     "\n"
-                    + bcolors.OKGREEN
+                    + Bcolors.OKGREEN
                     + f"CSV file writtten to {args.csv}"
-                    + bcolors.ENDC
+                    + Bcolors.ENDC
                 )
 
         else:
@@ -495,6 +573,7 @@ def handle_profiles(jamf_url, api_endpoint, token, args, verbosity):
 
 
 def handle_packages(jamf_url, token, args, verbosity):
+    """Function for handling packages"""
     unused_packages = {}
     used_packages = {}
     if args.unused:
@@ -516,14 +595,16 @@ def handle_packages(jamf_url, token, args, verbosity):
         packages_in_prestages = []
 
     if args.all or args.unused:
-        packages = api_get.get_api_obj_list(jamf_url, "package", token, verbosity)
+        packages = api_get.get_api_obj_list(jamf_url, "package",
+                                            token, verbosity)
         if packages:
             # declare the csv data for export 
             if args.unused:
                 csv_fields = ['pkg_id', 'pkg_name', 'used']
                 csv_data = []
             elif args.details:
-                csv_fields = ['pkg_id', 'pkg_name', 'filename', 'category', 'info', 'notes']
+                csv_fields = ['pkg_id', 'pkg_name', 'filename', 'category',
+                              'info', 'notes']
                 csv_data = []
             for package in packages:
                 # loop all the packages
@@ -553,21 +634,29 @@ def handle_packages(jamf_url, token, args, verbosity):
                         and unused_in_prestages == 1
                     ):
                         unused_packages[package["id"]] = package["name"]
-                        csv_data.append({'pkg_id': package['id'], 'pkg_name': package['name'], 'used': 'false'})
+                        csv_data.append({'pkg_id': package['id'],
+                                         'pkg_name': package['name'],
+                                         'used': 'false'})
                     elif package["name"] not in used_packages:
                         used_packages[package["id"]] = package["name"]
-                        csv_data.append({'pkg_id': package['id'], 'pkg_name': package['name'], 'used': 'true'})
+                        csv_data.append({'pkg_id': package['id'],
+                                         'pkg_name': package['name'],
+                                         'used': 'true'})
                 else:
                     print(
-                        bcolors.WARNING
+                        Bcolors.WARNING
                         + f"  package {package['id']}\n"
                         + f"      name     : {package['name']}"
-                        + bcolors.ENDC
+                        + Bcolors.ENDC
                     )
                     if args.details:
                         # gather interesting info for each package via API
                         generic_info = api_get.get_api_obj_value_from_id(
-                            jamf_url, "package", package["id"], "", token, verbosity
+                            jamf_url, "package",
+                            package["id"],
+                            "",
+                            token,
+                            verbosity
                         )
 
                         filename = generic_info["filename"]
@@ -581,29 +670,39 @@ def handle_packages(jamf_url, token, args, verbosity):
                         notes = generic_info["notes"]
                         if notes:
                             print(f"      notes    : {notes}")
-                        csv_data.append({'pkg_id': package['id'], 'pkg_name': package['name'], 'filename': filename, 'category': category, 'info': info, 'notes': notes})
+                        csv_data.append(
+                            {
+                                'pkg_id': package['id'],
+                                'pkg_name': package['name'],
+                                'filename': filename,
+                                'category': category,
+                                'info': info,
+                                'notes': notes
+                            }
+                        )
             if args.details or args.unused:
                 api_connect.write_csv_file(args.csv, csv_fields, csv_data)
                 print(
                     "\n"
-                    + bcolors.OKGREEN
+                    + Bcolors.OKGREEN
                     + f"CSV file writtten to {args.csv}"
-                    + bcolors.ENDC
+                    + Bcolors.ENDC
                 )
             if args.unused:
                 print(
-                    "\nThe following packages are found in at least one policy, "
-                    "PreStage Enrollment, and/or patch title:\n"
+                    "\nThe following packages are found in at least one "
+                    "policy, PreStage Enrollment, and/or patch title:\n"
                 )
                 for pkg_name in used_packages.values():
-                    print(bcolors.OKGREEN + pkg_name + bcolors.ENDC)
+                    print(Bcolors.OKGREEN + pkg_name + Bcolors.ENDC)
 
                 print(
                     "\nThe following packages are not used in any policies, "
                     "PreStage Enrollments, or patch titles:\n"
                 )
                 for pkg_id, pkg_name in unused_packages.items():
-                    print(bcolors.FAIL + f"[{pkg_id}] " + pkg_name + bcolors.ENDC)
+                    print(Bcolors.FAIL + f"[{pkg_id}] " +
+                          pkg_name + Bcolors.ENDC)
 
                 if args.delete:
                     if actions.confirm(
@@ -620,9 +719,9 @@ def handle_packages(jamf_url, token, args, verbosity):
                         # prompt to delete each package in turn
                         if delete_all or actions.confirm(
                             prompt=(
-                                bcolors.OKBLUE
+                                Bcolors.OKBLUE
                                 + f"Delete [{pkg_id}] {pkg_name}?"
-                                + bcolors.ENDC
+                                + Bcolors.ENDC
                             ),
                             default=False,
                         ):
@@ -648,6 +747,7 @@ def handle_packages(jamf_url, token, args, verbosity):
 
 
 def handle_scripts(jamf_url, token, args, verbosity):
+    """Function for handling scripts"""
     unused_scripts = {}
     used_scripts = {}
     if args.unused:
@@ -660,9 +760,11 @@ def handle_scripts(jamf_url, token, args, verbosity):
         scripts_in_policies = []
 
     if args.all or args.unused:
-        csv_fields = ['script_id', 'script_name', 'category', 'info', 'notes', 'priority']
+        csv_fields = ['script_id', 'script_name', 'category', 
+                      'info', 'notes', 'priority']
         csv_data = []
-        scripts = api_get.get_uapi_obj_list(jamf_url, "script", token, verbosity)
+        scripts = api_get.get_uapi_obj_list(jamf_url, "script",
+                                            token, verbosity)
         if scripts:
             for script in scripts:
                 # loop all the scripts
@@ -680,10 +782,10 @@ def handle_scripts(jamf_url, token, args, verbosity):
                         used_scripts[script["id"]] = script["name"]
                 else:
                     print(
-                        bcolors.WARNING
+                        Bcolors.WARNING
                         + f"  script {script['id']}\n"
                         + f"      name     : {script['name']}"
-                        + bcolors.ENDC
+                        + Bcolors.ENDC
                     )
                     if args.details:
                         # gather interesting info for each script via API
@@ -702,25 +804,40 @@ def handle_scripts(jamf_url, token, args, verbosity):
                             print(f"      notes    : {notes}")
                         priority = generic_info["priority"]
                         print(f"      priority  : {priority}")
-                        csv_data.append({'script_id': script['id'], 'script_name': script['name'], 'category': category, 'info': info, 'notes': notes, 'priority': priority})
+                        csv_data.append(
+                            {
+                                'script_id': script['id'],
+                                'script_name': script['name'],
+                                'category': category,
+                                'info': info,
+                                'notes': notes,
+                                'priority': priority
+                            }
+                        )
 
             if args.details:
                 api_connect.write_csv_file(args.csv, csv_fields, csv_data)
                 print(
                     "\n"
-                    + bcolors.OKGREEN
+                    + Bcolors.OKGREEN
                     + f"CSV file writtten to {args.csv}"
-                    + bcolors.ENDC
+                    + Bcolors.ENDC
                 )
 
             if args.unused:
-                print("\nThe following scripts are found in at least one policy:\n")
+                print("\nThe following scripts are found in "
+                      "at least one policy:\n")
                 for script_name in used_scripts.values():
-                    print(bcolors.OKGREEN + script_name + bcolors.ENDC)
+                    print(Bcolors.OKGREEN + script_name + Bcolors.ENDC)
 
-                print("\nThe following scripts are not used in any policies:\n")
+                print(
+                    "\nThe following scripts are not used in any policies:\n"
+                )
                 for script_id, script_name in unused_scripts.items():
-                    print(bcolors.FAIL + f"[{script_id}] " + script_name + bcolors.ENDC)
+                    print(Bcolors.FAIL +
+                          f"[{script_id}] " +
+                          script_name +
+                          Bcolors.ENDC)
 
                 if args.delete:
                     if actions.confirm(
@@ -737,9 +854,9 @@ def handle_scripts(jamf_url, token, args, verbosity):
                         # prompt to delete each script in turn
                         if delete_all or actions.confirm(
                             prompt=(
-                                bcolors.OKBLUE
+                                Bcolors.OKBLUE
                                 + f"Delete {script_name} (id={script_id})?"
-                                + bcolors.ENDC
+                                + Bcolors.ENDC
                             ),
                             default=False,
                         ):
@@ -754,7 +871,9 @@ def handle_scripts(jamf_url, token, args, verbosity):
 
 
 def handle_eas(jamf_url, token, args, verbosity):
-    csv_fields = ['ea_id', 'ea_name', 'enabled', 'data_type', 'input_type', 'inventory_display']
+    """Function for handling extension attributes"""
+    csv_fields = ['ea_id', 'ea_name', 'enabled', 'data_type', 
+                  'input_type', 'inventory_display']
     csv_data = []
     unused_eas = {}
     used_eas = {}
@@ -801,10 +920,10 @@ def handle_eas(jamf_url, token, args, verbosity):
                         used_eas[ea["id"]] = ea["name"]
                 else:
                     print(
-                        bcolors.WARNING
+                        Bcolors.WARNING
                         + f"  EA {ea['id']}\n"
                         + f"      name     : {ea['name']}"
-                        + bcolors.ENDC
+                        + Bcolors.ENDC
                     )
                     if args.details:
                         # gather interesting info for each EA via API
@@ -823,32 +942,44 @@ def handle_eas(jamf_url, token, args, verbosity):
                         input_type = generic_info["input_type"]["type"]
                         print(f"      input_type              : {input_type}")
                         inventory_display = generic_info["inventory_display"]
-                        print(f"      inventory_display  : {inventory_display}")
-                        csv_data.append({'ea_id': ea['id'], 'ea_name': ea['name'], 'enabled': enabled, 'data_type': data_type, 'input_type': input_type, 'inventory_display': inventory_display})
+                        print(
+                            f"      inventory_display  : {inventory_display}"
+                        )
+                        csv_data.append(
+                            {
+                                'ea_id': ea['id'],
+                                'ea_name': ea['name'],
+                                'enabled': enabled,
+                                'data_type': data_type,
+                                'input_type': input_type,
+                                'inventory_display': inventory_display
+                            }
+                        )
 
             if args.details:
                 api_connect.write_csv_file(args.csv, csv_fields, csv_data)
                 print(
                     "\n"
-                    + bcolors.OKGREEN
+                    + Bcolors.OKGREEN
                     + f"CSV file writtten to {args.csv}"
-                    + bcolors.ENDC
+                    + Bcolors.ENDC
                 )
 
             if args.unused:
                 print(
-                    "\nThe following EAs are found in at least one smart group "
-                    "or advanced search:\n"
+                    "\nThe following EAs are found in at least one "
+                    "smart group or advanced search:\n"
                 )
                 for ea_name in used_eas.values():
-                    print(bcolors.OKGREEN + ea_name + bcolors.ENDC)
+                    print(Bcolors.OKGREEN + ea_name + Bcolors.ENDC)
 
                 print(
                     "\nThe following EAs are not used in any smart groups "
                     "or advanced searches:\n"
                 )
                 for ea_id, ea_name in unused_eas.items():
-                    print(bcolors.FAIL + f"[{ea_id}] " + ea_name + bcolors.ENDC)
+                    print(Bcolors.FAIL + f"[{ea_id}] " +
+                          ea_name + Bcolors.ENDC)
 
                 if args.delete:
                     if actions.confirm(
@@ -865,9 +996,9 @@ def handle_eas(jamf_url, token, args, verbosity):
                         # prompt to delete each EA in turn
                         if delete_all or actions.confirm(
                             prompt=(
-                                bcolors.OKBLUE
+                                Bcolors.OKBLUE
                                 + f"Delete {ea_name} (id={ea_id})?"
-                                + bcolors.ENDC
+                                + Bcolors.ENDC
                             ),
                             default=False,
                         ):
@@ -886,6 +1017,7 @@ def handle_eas(jamf_url, token, args, verbosity):
 
 
 def handle_groups(jamf_url, token, args, verbosity):
+    """Function for handling computer groups"""
     csv_fields = ['group_id', 'group_name', 'is_smart']
     csv_data = []
     unused_groups = {}
@@ -1002,10 +1134,10 @@ def handle_groups(jamf_url, token, args, verbosity):
                         used_groups[group["id"]] = group["name"]
                 else:
                     print(
-                        bcolors.WARNING
+                        Bcolors.WARNING
                         + f"  group {group['id']}\n"
                         + f"      name     : {group['name']}"
-                        + bcolors.ENDC
+                        + Bcolors.ENDC
                     )
                     if args.details:
                         # gather interesting info for each group via API
@@ -1019,35 +1151,44 @@ def handle_groups(jamf_url, token, args, verbosity):
 
                         is_smart = generic_info["computer_group"]["is_smart"]
                         print(f"      is smart            : {is_smart}")
-                        csv_data.append({'group_id': group['id'], 'group_name': group['name'], 'is_smart': is_smart})
+                        csv_data.append(
+                            {
+                                'group_id': group['id'],
+                                'group_name': group['name'],
+                                'is_smart': is_smart
+                            }
+                        )
 
             if args.details:
                 api_connect.write_csv_file(args.csv, csv_fields, csv_data)
                 print(
                     "\n"
-                    + bcolors.OKGREEN
+                    + Bcolors.OKGREEN
                     + f"CSV file writtten to {args.csv}"
-                    + bcolors.ENDC
+                    + Bcolors.ENDC
                 )
 
             if args.unused:
                 print(
-                    "\nThe following groups are criteria in at least one smart group or "
-                    "advanced search,\n"
+                    "\nThe following groups are criteria in at least one "
+                    "smart group or advanced search,\n"
                     "and/or are scoped or excluded in at least one "
                     "policy, patch policy, Mac App Store app,\n"
                     "configuration profile or restricted software:\n"
                 )
                 for group_name in used_groups.values():
-                    print(bcolors.OKGREEN + group_name + bcolors.ENDC)
+                    print(Bcolors.OKGREEN + group_name + Bcolors.ENDC)
 
                 print(
-                    "\nThe following groups are not found in any smart groups, advanced searches\n"
+                    "\nThe following groups are not found in any "
+                    "smart groups, "
+                    "advanced searches\n"
                     "policies, patch policies, Mac App Store apps, "
                     "configuration profiles or restricted software:\n"
                 )
                 for group_id, group_name in unused_groups.items():
-                    print(bcolors.FAIL + f"[{group_id}] " + group_name + bcolors.ENDC)
+                    print(Bcolors.FAIL + f"[{group_id}] " +
+                          group_name + Bcolors.ENDC)
 
                 if args.delete:
                     if actions.confirm(
@@ -1064,9 +1205,9 @@ def handle_groups(jamf_url, token, args, verbosity):
                         # prompt to delete each group in turn
                         if delete_all or actions.confirm(
                             prompt=(
-                                bcolors.OKBLUE
+                                Bcolors.OKBLUE
                                 + f"Delete {group_name} (id={group_id})?"
-                                + bcolors.ENDC
+                                + Bcolors.ENDC
                             ),
                             default=False,
                         ):
@@ -1085,6 +1226,7 @@ def handle_groups(jamf_url, token, args, verbosity):
 
 
 def handle_ios_groups(jamf_url, token, args, verbosity):
+    """Function for handling mobile device groups"""
     csv_fields = ['group_id', 'group_name', 'is_smart']
     csv_data = []
     unused_groups = {}
@@ -1095,15 +1237,19 @@ def handle_ios_groups(jamf_url, token, args, verbosity):
             jamf_url, token, verbosity
         )
         # look in advanced searches for computer groups in the criteria
-        names_in_advanced_searches = api_get.get_names_in_ios_advanced_searches(
-            jamf_url, token, verbosity
+        names_in_ios_advanced_searches = (
+            api_get.get_names_in_ios_advanced_searches(
+                jamf_url, token, verbosity
+            )
         )
-        # look in the scope of Mac App Store apps
-        groups_in_mas_apps = api_get.get_groups_in_ios_api_objs(
-            jamf_url, token, "mobile_device_application", verbosity
+        # look in the scope of App Store apps
+        groups_in_ios_apps = (
+            api_get.get_groups_in_ios_api_objs(
+                jamf_url, token, "mobile_device_application", verbosity
+            )
         )
-        # look in the scope of configurator profiles
-        groups_in_config_profiles = api_get.get_groups_in_ios_api_objs(
+        # look in the scope of configuration profiles
+        groups_in_ios_config_profiles = api_get.get_groups_in_ios_api_objs(
             jamf_url, token, "configuration_profile", verbosity
         )
 
@@ -1162,10 +1308,10 @@ def handle_ios_groups(jamf_url, token, args, verbosity):
                         used_groups[group["id"]] = group["name"]
                 else:
                     print(
-                        bcolors.WARNING
+                        Bcolors.WARNING
                         + f"  group {group['id']}\n"
                         + f"      name     : {group['name']}"
-                        + bcolors.ENDC
+                        + Bcolors.ENDC
                     )
                     if args.details:
                         # gather interesting info for each group via API
@@ -1177,35 +1323,45 @@ def handle_ios_groups(jamf_url, token, args, verbosity):
                             verbosity,
                         )
 
-                        is_smart = generic_info["mobile_device_group"]["is_smart"]
+                        is_smart = (
+                            generic_info["mobile_device_group"]["is_smart"]
+                        )
                         print(f"      is smart            : {is_smart}")
-                        csv_data.append({'group_id': group['id'], 'group_name': group['name'], 'is_smart': is_smart})
+                        csv_data.append(
+                            {
+                                'group_id': group['id'],
+                                'group_name': group['name'],
+                                'is_smart': is_smart
+                            }
+                        )
 
             if args.details:
                 api_connect.write_csv_file(args.csv, csv_fields, csv_data)
                 print(
                     "\n"
-                    + bcolors.OKGREEN
+                    + Bcolors.OKGREEN
                     + f"CSV file writtten to {args.csv}"
-                    + bcolors.ENDC
+                    + Bcolors.ENDC
                 )
 
             if args.unused:
                 print(
-                    "\nThe following groups are criteria in at least one smart group or "
-                    "advanced search,\n"
+                    "\nThe following groups are criteria in at least one "
+                    "smart group or advanced search,\n"
                     "and/or are scoped or excluded in at least one "
                     "App Store app or configuration profile:\n"
                 )
                 for group_name in used_groups.values():
-                    print(bcolors.OKGREEN + group_name + bcolors.ENDC)
+                    print(Bcolors.OKGREEN + group_name + Bcolors.ENDC)
 
                 print(
-                    "\nThe following groups are not found in any smart groups, advanced searches\n"
+                    "\nThe following groups are not found in any "
+                    "smart groups, advanced searches\n"
                     "App Store apps or configuration profiles:\n"
                 )
                 for group_id, group_name in unused_groups.items():
-                    print(bcolors.FAIL + f"[{group_id}] " + group_name + bcolors.ENDC)
+                    print(Bcolors.FAIL + f"[{group_id}] " +
+                          group_name + Bcolors.ENDC)
 
                 if args.delete:
                     if actions.confirm(
@@ -1222,9 +1378,9 @@ def handle_ios_groups(jamf_url, token, args, verbosity):
                         # prompt to delete each group in turn
                         if delete_all or actions.confirm(
                             prompt=(
-                                bcolors.OKBLUE
+                                Bcolors.OKBLUE
                                 + f"Delete {group_name} (id={group_id})?"
-                                + bcolors.ENDC
+                                + Bcolors.ENDC
                             ),
                             default=False,
                         ):
@@ -1247,16 +1403,25 @@ def get_args():
     parser = argparse.ArgumentParser()
 
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--computers", action="store_true", dest="computer", default=[])
-    group.add_argument("--policies", action="store_true")
-    group.add_argument("--packages", action="store_true")
-    group.add_argument("--scripts", action="store_true")
-    group.add_argument("--ea", action="store_true")
-    group.add_argument("--groups", action="store_true")
-    group.add_argument("--iosgroups", action="store_true")
-    group.add_argument("--macosprofiles", action="store_true")
-    group.add_argument("--macosgroups", action="store_true")
-    group.add_argument("--iosprofiles", action="store_true")
+    group.add_argument("--computers", action="store_true", dest="computer", 
+                       default=[], help="List computers")
+    group.add_argument("--policies", action="store_true", help="List policies")
+    group.add_argument("--packages", action="store_true", help="List packages")
+    group.add_argument("--scripts", action="store_true", help="List scripts")
+    group.add_argument("--ea", action="store_true", 
+                       help="List extension attributes")
+    group.add_argument("--groups", "--macosgroups", dest="macosgroups", 
+                       action="store_true", help="List Computer Groups")
+    group.add_argument("--iosgroups", action="store_true", 
+                       help="List Mobile Device Groups")
+    group.add_argument("--macosprofiles", action="store_true", 
+                       help="List Computer Configuration Profiles")
+    group.add_argument("--iosprofiles", action="store_true", 
+                       help="List Mobile Device Configuration Profiles")
+    group.add_argument("--acs", action="store_true", 
+                       help="List Advanced Computer Searches")
+    group.add_argument("--ads", action="store_true", 
+                       help="List Advanced Mobile Device Searches")
 
     parser.add_argument(
         "--category",
@@ -1337,7 +1502,8 @@ def get_args():
             "Path to a CSV file to output to. "
         ),
     )
-    parser.add_argument("--slack", help="Post a slack webhook", action="store_true")
+    parser.add_argument("--slack", help="Post a slack webhook",
+                        action="store_true")
     parser.add_argument("--url", default="", help="the Jamf Pro Server URL")
     parser.add_argument(
         "--user", default="", help="a user with the rights to delete a policy"
@@ -1367,7 +1533,8 @@ def get_args():
         "--smb_pass",
         default="",
         help=(
-            "password of the user with the rights to upload a package to the SMB "
+            "password of the user with the rights to upload a "
+            "package to the SMB "
             "FileShare Distribution Point"
         ),
     )
@@ -1377,9 +1544,12 @@ def get_args():
         help=(
             "full path to an AutoPkg prefs file containing "
             "JSS URL, API_USERNAME and API_PASSWORD, "
-            "for example an AutoPkg preferences file which has been configured "
-            "for use with JSSImporter (~/Library/Preferences/com.github.autopkg.plist) "
-            "or a separate plist anywhere (e.g. ~/.com.company.jcds_upload.plist)"
+            "for example an AutoPkg preferences "
+            "file which has been configured "
+            "for use with JamfUploader "
+            "(~/Library/Preferences/com.github.autopkg.plist) "
+            "or a separate plist anywhere "
+            "(e.g. ~/.com.company.jcds_upload.plist)"
         ),
     )
     parser.add_argument(
@@ -1403,39 +1573,46 @@ def main():
     verbosity = args.verbose
 
     # grab values from a prefs file if supplied
-    jamf_url, jamf_user, _, slack_webhook, enc_creds = api_connect.get_creds_from_args(args)
+    jamf_url, jamf_user, _, slack_webhook, enc_creds = (
+        api_connect.get_creds_from_args(args)
+    )
 
     if args.prefs:
-        smb_url, smb_user, smb_pass = api_connect.get_smb_credentials(args.prefs)
+        smb_url, smb_user, smb_pass = (
+            api_connect.get_smb_credentials(args.prefs)
+        )
     else:
         smb_url = ""
         smb_user = ""
         smb_pass = ""
 
-    # repeat for optional SMB share (but must supply a share path to invoke this)
+    # repeat for optional SMB share
+    # - but must supply a share path to invoke this
     if args.smb_url:
         smb_url = args.smb_url
         if args.smb_user:
             smb_user = args.smb_user
         if not smb_user:
             smb_user = input(
-                "Enter a user with read/write permissions to {} : ".format(smb_url)
+                f"Enter a user with read/write permissions to {smb_url} : "
             )
         if args.smb_pass:
             smb_pass = args.smb_pass
         if not smb_pass:
             if not smb_pass:
                 smb_pass = getpass.getpass(
-                    "Enter the password for '{}' : ".format(smb_user)
+                    f"Enter the password for '{smb_user}' : "
                 )
 
     # now get the session token
-    token = api_connect.get_uapi_token(jamf_url, jamf_user, enc_creds, verbosity)
+    token = api_connect.get_uapi_token(jamf_url, jamf_user,
+                                       enc_creds, verbosity)
 
     if args.slack:
         if not slack_webhook:
-            print("slack_webhook value error. Please set it in your prefs file.")
-            exit()
+            print("slack_webhook value error. "
+                  "Please set it in your prefs file.")
+            sys.exit()
 
     # computers
     if args.computer:
@@ -1449,32 +1626,32 @@ def main():
             handle_policies(jamf_url, token, args, verbosity)
 
     # packages
-    if args.packages:
+    elif args.packages:
         handle_packages(jamf_url, token, args, verbosity)
 
     # scripts
-    if args.scripts:
+    elif args.scripts:
         handle_scripts(jamf_url, token, args, verbosity)
 
     # extension attributes
-    if args.ea:
+    elif args.ea:
         handle_eas(jamf_url, token, args, verbosity)
 
     # extension attributes
-    if args.groups or args.macosgroups:
+    elif args.macosgroups:
         handle_groups(jamf_url, token, args, verbosity)
 
     # extension attributes
-    if args.iosgroups:
+    elif args.iosgroups:
         handle_ios_groups(jamf_url, token, args, verbosity)
 
     # computer attributes
-    if args.macosprofiles:
+    elif args.macosprofiles:
         api_endpoint = "os_x_configuration_profile"
         handle_profiles(jamf_url, api_endpoint, token, args, verbosity)
 
     # mobile device attributes
-    if args.iosprofiles:
+    elif args.iosprofiles:
         api_endpoint = "configuration_profile"
         handle_profiles(jamf_url, api_endpoint, token, args, verbosity)
 
