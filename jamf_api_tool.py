@@ -572,6 +572,45 @@ def handle_profiles(jamf_url, api_endpoint, token, args, verbosity):
         exit("ERROR: with --computerprofiles you must supply --all.")
 
 
+def handle_advancedsearches(jamf_url, api_endpoint, token, args, verbosity):
+    """Function for handling advanced searches"""
+    # declare the csv data for export 
+    csv_fields = ['search_id', 'search_name']
+    csv_data = []
+    if args.all:
+        advancedsearches = api_get.get_api_obj_list(jamf_url, api_endpoint,
+                                                    token, verbosity)
+        if advancedsearches:
+            for search in advancedsearches:
+                # loop all the advancedsearches
+                print(
+                    Bcolors.WARNING
+                    + f"  advancedsearch {search['id']}\n"
+                    + f"      name     : {search['name']}"
+                    + Bcolors.ENDC
+                )
+                csv_data.append(
+                    {
+                        'search_id': search['id'],
+                        'search_name': search['name'],
+                    }
+                )
+
+            if args.details:
+                api_connect.write_csv_file(args.csv, csv_fields, csv_data)
+                print(
+                    "\n"
+                    + Bcolors.OKGREEN
+                    + f"CSV file writtten to {args.csv}"
+                    + Bcolors.ENDC
+                )
+
+        else:
+            print("\nNo profiles found")
+    else:
+        exit("ERROR: with --computerprofiles you must supply --all.")
+
+
 def handle_packages(jamf_url, token, args, verbosity):
     """Function for handling packages"""
     unused_packages = {}
@@ -1645,15 +1684,25 @@ def main():
     elif args.iosgroups:
         handle_ios_groups(jamf_url, token, args, verbosity)
 
-    # computer attributes
+    # computer profiles
     elif args.macosprofiles:
         api_endpoint = "os_x_configuration_profile"
         handle_profiles(jamf_url, api_endpoint, token, args, verbosity)
 
-    # mobile device attributes
+    # mobile device profiles
     elif args.iosprofiles:
         api_endpoint = "configuration_profile"
         handle_profiles(jamf_url, api_endpoint, token, args, verbosity)
+
+    # adavanced computer searches
+    elif args.acs:
+        api_endpoint = "advanced_computer_search"
+        handle_advancedsearches(jamf_url, api_endpoint, token, args, verbosity)
+
+    # adavanced computer searches
+    elif args.ads:
+        api_endpoint = "advanced_mobile_device_search"
+        handle_advancedsearches(jamf_url, api_endpoint, token, args, verbosity)
 
     # process a name or list of names
     if args.names:
