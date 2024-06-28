@@ -40,7 +40,9 @@ def substitute_assignable_keys(data, cli_custom_keys, verbosity, xml_escape=Fals
                     replacement_key = cli_custom_keys[found_key]
                 data = data.replace(f"%{found_key}%", replacement_key)
             else:
-                print(f"WARNING: '{found_key}' has no replacement object!",)
+                print(
+                    f"WARNING: '{found_key}' has no replacement object!",
+                )
     return data
 
 
@@ -71,15 +73,15 @@ def confirm(prompt=None, default=False):
     Examples:
 
     confirm(prompt='Create Directory?', default=True)
-    Create Directory? [y]|n:
+    Create Directory? [y]|n|q:
     True
 
     confirm(prompt='Create Directory?', default=False)
-    Create Directory? [n]|y:
+    Create Directory? [n]|y|q:
     False
 
     confirm(prompt='Create Directory?', default=False)
-    Create Directory? [n]|y: y
+    Create Directory? [n]|y|q: y
     True
 
     Source:
@@ -90,21 +92,24 @@ def confirm(prompt=None, default=False):
         prompt = "Confirm"
 
     if default:
-        prompt = "%s [%s]|%s: " % (prompt, "y", "n")
+        prompt = "%s [%s]|%s|q: " % (prompt, "y", "n")
     else:
-        prompt = "%s [%s]|%s: " % (prompt, "n", "y")
+        prompt = "%s [%s]|%s|q: " % (prompt, "n", "y")
 
     while True:
         answer = input(prompt)
         if not answer:
             return default
-        if answer not in ["y", "Y", "n", "N"]:
-            print("Please enter Y or N.")
+        if answer not in ["y", "Y", "n", "N", "q", "Q"]:
+            print("Please enter Y or N or Q.")
             continue
         if answer == "y" or answer == "Y":
             return True
         if answer == "n" or answer == "N":
             return False
+        if answer == "q" or answer == "Q":
+            print("Quitting as Q selected")
+            exit()
 
 
 # def days_between(d1, d2):
