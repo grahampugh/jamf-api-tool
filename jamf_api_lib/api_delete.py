@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+"""Functions that help delete objects using the API"""
+
 from time import sleep
 
 from . import curl, api_objects, api_get
@@ -23,7 +25,10 @@ def delete_api_object(jamf_url, object_type, obj_id, token, verbosity):
             print(f"WARNING: {object_type} delete did not succeed after 5 attempts")
             print(f"\nHTTP POST Response Code: {r.status_code}")
             break
-        sleep(30)
+        else:
+            print(f"\nHTTP POST Response Code: {r.status_code}")
+            print(f"Waiting {count}s to try again...")
+            sleep(count)
 
     if verbosity > 1:
         api_get.get_headers(r)
@@ -47,7 +52,10 @@ def delete_uapi_object(jamf_url, object_type, obj_id, token, verbosity):
             print(f"WARNING: {object_type} delete did not succeed after 5 attempts")
             print(f"\nHTTP POST Response Code: {r.status_code}")
             break
-        sleep(30)
+        else:
+            print(f"\nHTTP POST Response Code: {r.status_code}")
+            print(f"Waiting {count}s to try again...")
+            sleep(count)
 
     if verbosity > 1:
         api_get.get_headers(r)

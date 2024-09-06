@@ -65,6 +65,10 @@ while test $# -gt 0 ; do
             shift
             password="$1"
             ;;
+        --csv)  
+            shift
+            csv="$1"
+            ;;
         -h|--help)
             usage
             exit 0
@@ -90,6 +94,11 @@ elif [[ -f "$autopkg_prefs" ]]; then
 else
     echo "No credentials supplied"
     exit 1
+fi
+
+if [[ $csv ]]; then
+    args+=("--csv")
+    args+=("$csv")
 fi
 
 ###############

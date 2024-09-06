@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+"""Functions that help perform curl requests"""
+
+
 import json
 import os
 import re
@@ -36,9 +39,9 @@ def request(method, url, auth, verbosity, data="", additional_headers="", xml=Fa
 
     # the authorisation requires a token
     if "/token" not in url:
-        curl_cmd.extend(["--header", "authorization: Bearer {}".format(auth)])
+        curl_cmd.extend(["--header", f"authorization: Bearer {auth}"])
     else:
-        curl_cmd.extend(["--header", "authorization: Basic {}".format(auth)])
+        curl_cmd.extend(["--header", f"authorization: Basic {auth}"])
 
     # set either Accept or Content-Type depending on method
     if method == "GET" or method == "DELETE":
@@ -72,30 +75,30 @@ def request(method, url, auth, verbosity, data="", additional_headers="", xml=Fa
         else:
             curl_cmd.extend(["--header", "Content-type: application/xml"])
     else:
-        print("WARNING: HTTP method {} not supported".format(method))
+        print(f"WARNING: HTTP method {method} not supported")
 
     # write session
     try:
-        with open(headers_file, "r") as file:
+        with open(headers_file, "r", encoding="utf-8") as file:
             headers = file.readlines()
         existing_headers = [x.strip() for x in headers]
         for header in existing_headers:
             if "APBALANCEID" in header:
-                with open(cookie_jar, "w") as fp:
+                with open(cookie_jar, "w", encoding="utf-8") as fp:
                     fp.write(header)
     except IOError:
         pass
 
     # look for existing session
     try:
-        with open(cookie_jar, "r") as file:
+        with open(cookie_jar, "r", encoding="utf-8") as file:
             headers = file.readlines()
         existing_headers = [x.strip() for x in headers]
         for header in existing_headers:
             if "APBALANCEID" in header:
                 cookie = header.split()[1].rstrip(";")
                 if verbosity > 1:
-                    print("Existing cookie found: {}".format(cookie))
+                    print(f"Existing cookie found: {cookie}")
                 curl_cmd.extend(["--cookie", cookie])
 
     except IOError:
@@ -113,7 +116,7 @@ def request(method, url, auth, verbosity, data="", additional_headers="", xml=Fa
         curl_cmd.append("-v")
 
     if verbosity > 1:
-        print("\ncurl command:\n{}".format(" ".join(curl_cmd)))
+        print(f"\ncurl command:\n{curl_cmd}")
         print("(note this may omit essential quotation marks - do not copy-and-paste!")
 
     # now subprocess the curl command and build the r tuple which contains the
@@ -124,14 +127,14 @@ def request(method, url, auth, verbosity, data="", additional_headers="", xml=Fa
         "r", ["headers", "status_code", "output"], defaults=(None, None, None)
     )
     try:
-        with open(headers_file, "r") as file:
+        with open(headers_file, "r", encoding="utf-8") as file:
             headers = file.readlines()
         r.headers = [x.strip() for x in headers]
-        for header in r.headers:
+        for header in r.headers:  # pylint: disable=not-an-iterable
             if re.match(r"HTTP/(1.1|2)", header) and "Continue" not in header:
                 r.status_code = int(header.split()[1])
     except IOError:
-        print("WARNING: {} not found".format(headers_file))
+        print(f"WARNING: {headers_file} not found")
     if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
         with open(output_file, "rb") as file:
             if "uapi" in url:
@@ -147,24 +150,19 @@ def status_check(r, endpoint_type, obj_name, request_type="upload"):
     """Return a message dependent on the HTTP response"""
 
     if r.status_code == 200 or r.status_code == 201 or r.status_code == 204:
-        print(
-            "{} '{}' {} was successful".format(
-                endpoint_type, obj_name, request_type.lower()
-            )
-        )
+        print(f"{endpoint_type} '{obj_name}' {request_type.lower()} successful")
         return "break"
     elif r.status_code == 409:
         print(
-            "WARNING: {} {} failed due to a conflict".format(
-                endpoint_type, request_type.lower()
-            )
+            f"WARNING: {endpoint_type} {request_type.lower()} failed due to a conflict"
         )
+        return "break"
+    elif r.status_code == 404:
+        print(f"WARNING: {endpoint_type} '{obj_name}' not found")
         return "break"
     elif r.status_code == 401:
         print(
-            "ERROR: {} {} failed due to permissions error".format(
-                endpoint_type, request_type.lower()
-            )
+            f"ERROR: {endpoint_type} {request_type.lower()} failed due to permissions error"
         )
         return "break"
 
@@ -173,7 +171,7 @@ def write_json_file(data, tmp_dir="/tmp/jamf_upload"):
     """dump some json to a temporary file"""
     make_tmp_dir(tmp_dir)
     tf = os.path.join(tmp_dir, f"jamf_upload_{str(uuid.uuid4())}.json")
-    with open(tf, "w") as fp:
+    with open(tf, "w", encoding="utf-8") as fp:
         json.dump(data, fp)
     return tf
 
@@ -182,7 +180,7 @@ def write_temp_file(data, tmp_dir="/tmp/jamf_upload"):
     """dump some text to a temporary file"""
     make_tmp_dir(tmp_dir)
     tf = os.path.join(tmp_dir, f"jamf_upload_{str(uuid.uuid4())}.txt")
-    with open(tf, "w") as fp:
+    with open(tf, "w", encoding="utf-8") as fp:
         fp.write(data)
     return tf
 

@@ -1,2 +1,5 @@
 # jamf-api-tool
-Standalone python tool for interacting with the Jamf API.
+
+A standalone python tool for interacting with the Jamf API.
+
+Run `--help` for usage instructions.

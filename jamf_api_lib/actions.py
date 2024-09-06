@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 
+"""Functions that perform miscellaneous actions"""
+
 import re
-import six
 import subprocess
 
 from xml.sax.saxutils import escape
 
-if six.PY2:
-    input = raw_input  # pylint: disable=E0602  # noqa: F821
-    from urlparse import urlparse  # pylint: disable=F0401
-else:
-    from urllib.parse import urlparse
+from urllib.parse import urlparse
 
 
 def substitute_assignable_keys(data, cli_custom_keys, verbosity, xml_escape=False):
@@ -49,13 +46,13 @@ def substitute_assignable_keys(data, cli_custom_keys, verbosity, xml_escape=Fals
 def status_check(r, endpoint_type, obj_name):
     """Return a message dependent on the HTTP response"""
     if r.status_code == 200 or r.status_code == 201:
-        print("{} '{}' uploaded successfully".format(endpoint_type, obj_name))
+        print(f"{endpoint_type} '{obj_name}' uploaded successfully")
         return "break"
     elif r.status_code == 409:
-        print("WARNING: {} upload failed due to a conflict".format(endpoint_type))
+        print(f"WARNING: {endpoint_type} upload failed due to a conflict")
         return "break"
     elif r.status_code == 401:
-        print("ERROR: {} upload failed due to permissions error".format(endpoint_type))
+        print(f"ERROR: {endpoint_type} upload failed due to permissions error")
         return "break"
     else:
         print(
@@ -92,9 +89,9 @@ def confirm(prompt=None, default=False):
         prompt = "Confirm"
 
     if default:
-        prompt = "%s [%s]|%s|q: " % (prompt, "y", "n")
+        prompt = f"{prompt} [y]|n|q: "
     else:
-        prompt = "%s [%s]|%s|q: " % (prompt, "n", "y")
+        prompt = f"{prompt} [n]|y|q: "
 
     while True:
         answer = input(prompt)
@@ -112,32 +109,24 @@ def confirm(prompt=None, default=False):
             exit()
 
 
-# def days_between(d1, d2):
-#     d1 = datetime.strptime(d1, "%Y-%m-%d")
-#     d2 = datetime.strptime(d2, "%Y-%m-%d")
-#     return abs((d2 - d1).days)
-
-
 def mount_smb(mount_share, mount_user, mount_pass, verbosity):
     """Mount distribution point."""
     mount_cmd = [
         "/usr/bin/osascript",
         "-e",
-        'mount volume "{}" as user name "{}" with password "{}"'.format(
-            mount_share, mount_user, mount_pass
-        ),
+        f'mount volume "{mount_share}" as user name "{mount_user}" with password "{mount_pass}"',
     ]
     if verbosity > 1:
-        print("Mount command:\n{}".format(mount_cmd))
+        print(f"Mount command:\n{mount_cmd}")
 
     r = subprocess.check_output(mount_cmd)
     if verbosity > 1:
-        print("Mount command response:\n{}".format(r.decode("UTF-8")))
+        print(f"Mount command response:\n{r.decode('UTF-8')}")
 
 
 def umount_smb(mount_share):
     """Unmount distribution point."""
-    path = "/Volumes{}".format(urlparse(mount_share).path)
+    path = f"/Volumes{urlparse(mount_share).path}"
     cmd = ["/usr/sbin/diskutil", "unmount", path]
     try:
         subprocess.check_call(cmd)

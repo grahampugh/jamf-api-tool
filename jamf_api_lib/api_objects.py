@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 
+"""Definitions of API endpoints used in this tool"""
+
+
 def api_endpoints(object_type):
     """Return the endpoint URL from the object type"""
-    api_endpoints = {
+    api_endpoint_list = {
         "account": "JSSResource/accounts",
         "advanced_computer_search": "JSSResource/advancedcomputersearches",
         "advanced_mobile_device_search": "JSSResource/advancedmobiledevicesearches",
@@ -35,14 +38,14 @@ def api_endpoints(object_type):
         "token": "api/v1/auth/token",
         "volume_purchasing_locations": "api/v1/volume-purchasing-locations",
     }
-    return api_endpoints[object_type]
+    return api_endpoint_list[object_type]
 
 
 def object_types(object_type):
     """return a dictionary of jamf API objects and their corresponding URI names"""
     # define the relationship between the object types and their URL
     # we could make this shorter with some regex but I think this way is clearer
-    object_types = {
+    object_type_list = {
         "advanced_computer_search": "advancedcomputersearches",
         "advanced_mobile_device_search": "advancedmobiledevicesearches",
         "category": "categories",
@@ -60,14 +63,14 @@ def object_types(object_type):
         "restricted_software": "restrictedsoftware",
         "script": "scripts",
     }
-    return object_types[object_type]
+    return object_type_list[object_type]
 
 
 def object_list_types(object_type):
     """return a dictionary of jamf API objects and their corresponding xml keys"""
     # define the relationship between the object types and the xml key in a GET request
     # of all objects we could make this shorter with some regex but I think this way is clearer
-    object_list_types = {
+    object_list_type_list = {
         "advanced_computer_search": "advanced_computer_searches",
         "advanced_mobile_device_search": "advanced_mobile_device_searches",
         "category": "categories",
@@ -86,5 +89,4 @@ def object_list_types(object_type):
         "restricted_software": "restricted_software",
         "script": "scripts",
     }
-    return object_list_types[object_type]
-
+    return object_list_type_list[object_type]

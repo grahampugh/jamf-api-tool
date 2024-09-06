@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+"""Functions that perform actions on SMB shares"""
+
 import os
 import subprocess
 
@@ -12,9 +14,7 @@ def mount_smb(mount_share, mount_user, mount_pass, verbosity):
     mount_cmd = [
         "/usr/bin/osascript",
         "-e",
-        'mount volume "{}" as user name "{}" with password "{}"'.format(
-            mount_share, mount_user, mount_pass
-        ),
+        f'mount volume "{mount_share}" as user name "{mount_user}" with password "{mount_pass}"',
     ]
     if verbosity > 1:
         print(f"Mount command:\n{mount_cmd}")
