@@ -10,7 +10,7 @@ import tempfile
 
 from base64 import b64encode
 
-from . import curl, api_objects
+from . import curl, api_objects  # pylint: disable=no-name-in-module
 
 
 def write_json_file(data):
@@ -183,6 +183,8 @@ def get_creds_from_args(args):
         jamf_password = args.password
     elif not jamf_password:
         jamf_password = getpass.getpass(f"Enter the password for '{jamf_user}' : ")
+    if args.slack_webhook:
+        slack_webhook = args.slack_webhook
 
     # encode the username and password into a basic auth b64 encoded string so that we can
     # get the session token

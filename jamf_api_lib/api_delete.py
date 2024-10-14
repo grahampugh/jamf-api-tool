@@ -4,7 +4,7 @@
 
 from time import sleep
 
-from . import curl, api_objects, api_get
+from . import curl, api_objects, api_get  # pylint: disable=no-name-in-module
 
 
 def delete_api_object(jamf_url, object_type, obj_id, token, verbosity):
@@ -29,9 +29,9 @@ def delete_api_object(jamf_url, object_type, obj_id, token, verbosity):
             print(f"\nHTTP POST Response Code: {r.status_code}")
             print(f"Waiting {count}s to try again...")
             sleep(count)
-
     if verbosity > 1:
         api_get.get_headers(r)
+    return r.status_code
 
 
 def delete_uapi_object(jamf_url, object_type, obj_id, token, verbosity):
@@ -56,6 +56,6 @@ def delete_uapi_object(jamf_url, object_type, obj_id, token, verbosity):
             print(f"\nHTTP POST Response Code: {r.status_code}")
             print(f"Waiting {count}s to try again...")
             sleep(count)
-
     if verbosity > 1:
         api_get.get_headers(r)
+    return r.status_code

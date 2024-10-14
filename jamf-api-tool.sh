@@ -69,6 +69,10 @@ while test $# -gt 0 ; do
             shift
             csv="$1"
             ;;
+        --slack)  
+            shift
+            slack_webhook_url="$1"
+            ;;
         -h|--help)
             usage
             exit 0
@@ -81,7 +85,7 @@ while test $# -gt 0 ; do
 done
 echo
 
-if [ "$url" ] && [ "$user" ] && [ "$password" ]; then
+if [[ "$url" && "$user" && "$password" ]]; then
     # write temp prefs file
     /usr/bin/defaults write "$tmp_prefs" JSS_URL "$url"
     /usr/bin/defaults write "$tmp_prefs" API_USERNAME "$user"
@@ -99,6 +103,11 @@ fi
 if [[ $csv ]]; then
     args+=("--csv")
     args+=("$csv")
+fi
+
+if [[ $slack_webhook_url ]]; then
+    /usr/bin/defaults write "$tmp_prefs" SLACK_WEBHOOK "$slack_webhook_url"
+    args+=("--slack")
 fi
 
 ###############

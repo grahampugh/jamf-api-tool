@@ -37,10 +37,10 @@ def request(method, url, auth, verbosity, data="", additional_headers="", xml=Fa
         url,
     ]
 
-    # the authorisation requires a token
+    # the authorisation requires a token (except Slack)
     if "/token" not in url:
         curl_cmd.extend(["--header", f"authorization: Bearer {auth}"])
-    else:
+    elif "slack" not in url:
         curl_cmd.extend(["--header", f"authorization: Basic {auth}"])
 
     # set either Accept or Content-Type depending on method

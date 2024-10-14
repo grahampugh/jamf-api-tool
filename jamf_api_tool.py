@@ -39,6 +39,32 @@ class Bcolors:
     UNDERLINE = "\033[4m"
 
 
+def send_slack_notification(
+    jamf_url,
+    slack_webhook,
+    api_xml_object,
+    chosen_api_obj_name,
+    api_obj_action,
+    status_code,
+):
+    """Send a Slack notification"""
+
+    slack_payload = str(
+        f"*API {api_xml_object} {api_obj_action} action*\n"
+        f"Name: *{chosen_api_obj_name}*\n"
+        f"Instance: {jamf_url}\n"
+        f"HTTP Response: {status_code}"
+    )
+
+    print(slack_payload)
+
+    data = {"username": jamf_url, "text": slack_payload}
+
+    url = slack_webhook
+    request_type = "POST"
+    curl.request(method=request_type, auth="", url=url, verbosity=1, data=data)
+
+
 def handle_computers(jamf_url, token, args, slack_webhook, verbosity):
     """Function for handling computer lists"""
     if args.search and args.all:
@@ -176,7 +202,7 @@ def handle_computers(jamf_url, token, args, slack_webhook, verbosity):
         curl.request(request_type, url, token, verbosity, data)
 
 
-def handle_policies(jamf_url, token, args, verbosity):
+def handle_policies(jamf_url, token, args, slack_webhook, verbosity):
     """Function for handling policies"""
     # declare the csv data for export
     csv_fields = [
@@ -327,7 +353,7 @@ def handle_policies(jamf_url, token, args, verbosity):
                     )
                     id_list = chosen_ids.split()
 
-                # prompt to delete each package in turn
+                # prompt to delete each policy in turn
                 for policy_id, policy_name in disabled_policies.items():
                     if delete_all or (
                         (policy_id in id_list or not id_list)
@@ -341,9 +367,19 @@ def handle_policies(jamf_url, token, args, verbosity):
                         )
                     ):
                         print(f"Deleting {policy_name}...")
-                        api_delete.delete_api_object(
+                        status_code = api_delete.delete_api_object(
                             jamf_url, "policy", policy_id, token, verbosity
                         )
+                        if args.slack:
+                            send_slack_notification(
+                                jamf_url,
+                                slack_webhook,
+                                "policy",
+                                policy_name,
+                                "delete",
+                                status_code,
+                            )
+
         else:
             print("something went wrong: no categories found.")
 
@@ -414,7 +450,7 @@ def handle_policies(jamf_url, token, args, verbosity):
         sys.exit("ERROR: with --policies you must supply --search or --all.")
 
 
-def handle_policies_from_csv_data(jamf_url, token, args, verbosity):
+def handle_policies_from_csv_data(jamf_url, token, args, slack_webhook, verbosity):
     """Function for deleting policies based on IDs in a CSV"""
     # import csv
     # create more specific output filename
@@ -476,14 +512,22 @@ def handle_policies_from_csv_data(jamf_url, token, args, verbosity):
                 )
             ):
                 print(f"Deleting {policy_name}...")
-                api_delete.delete_api_object(
+                status_code = api_delete.delete_api_object(
                     jamf_url, "policy", policy_id, token, verbosity
                 )
 
-    # loop through the IDs and delete
+                if args.slack:
+                    send_slack_notification(
+                        jamf_url,
+                        slack_webhook,
+                        "policy",
+                        policy_name,
+                        "delete",
+                        status_code,
+                    )
 
 
-def handle_policies_in_category(jamf_url, token, args, verbosity):
+def handle_policies_in_category(jamf_url, token, args, slack_webhook, verbosity):
     """Function for handling policies in a specific category"""
     csv_fields = [
         "policy_id",
@@ -561,9 +605,18 @@ def handle_policies_in_category(jamf_url, token, args, verbosity):
                         )
                     ):
                         print(f"Deleting {policy_name}...")
-                        api_delete.delete_api_object(
+                        status_code = api_delete.delete_api_object(
                             jamf_url, "policy", policy_id, token, verbosity
                         )
+                        if args.slack:
+                            send_slack_notification(
+                                jamf_url,
+                                slack_webhook,
+                                "policy",
+                                policy_name,
+                                "delete",
+                                status_code,
+                            )
 
             pathlib.Path(os.path.dirname(csv_write)).mkdir(parents=True, exist_ok=True)
             api_connect.write_csv_file(csv_write, csv_fields, csv_data)
@@ -577,7 +630,7 @@ def handle_policies_in_category(jamf_url, token, args, verbosity):
             print(f"Category '{category}' not found")
 
 
-def handle_policy_list(jamf_url, token, args, verbosity):
+def handle_policy_list(jamf_url, token, args, slack_webhook, verbosity):
     """Function for handling a search list of policies"""
     policy_names = args.names
     print(
@@ -607,9 +660,18 @@ def handle_policy_list(jamf_url, token, args, verbosity):
 
             print(f"Match found: '{name}' ID: {obj_id} Group: {groups}")
             if args.delete:
-                api_delete.delete_api_object(
+                status_code = api_delete.delete_api_object(
                     jamf_url, "policy", obj_id, token, verbosity
                 )
+                if args.slack:
+                    send_slack_notification(
+                        jamf_url,
+                        slack_webhook,
+                        "policy",
+                        policy_name,
+                        "delete",
+                        status_code,
+                    )
         else:
             print(f"Policy '{policy_name}' not found")
 
@@ -792,7 +854,7 @@ def handle_advancedsearches(jamf_url, api_endpoint, token, args, verbosity):
         exit("ERROR: with --computerprofiles you must supply --all.")
 
 
-def handle_packages(jamf_url, token, args, verbosity):
+def handle_packages(jamf_url, token, args, slack_webhook, verbosity):
     """Function for handling packages"""
     unused_packages = {}
     used_packages = {}
@@ -976,7 +1038,7 @@ def handle_packages(jamf_url, token, args, verbosity):
                             )
                         ):
                             print(f"Deleting {pkg_name}...")
-                            api_delete.delete_api_object(
+                            status_code = api_delete.delete_api_object(
                                 jamf_url, "package", pkg_id, token, verbosity
                             )
                             # process for SMB shares if defined
@@ -992,6 +1054,16 @@ def handle_packages(jamf_url, token, args, verbosity):
                                 smb_actions.delete_pkg(args.smb_url, pkg_name)
                                 # unmount the share
                                 smb_actions.umount_smb(args.smb_url)
+
+                            if args.slack:
+                                send_slack_notification(
+                                    jamf_url,
+                                    slack_webhook,
+                                    "package",
+                                    pkg_name,
+                                    "delete",
+                                    status_code,
+                                )
     elif args.search:
         query = args.search
         csv_fields = ["pkg_id", "pkg_name"]
@@ -1032,7 +1104,7 @@ def handle_packages(jamf_url, token, args, verbosity):
                         }
                     )
                     if args.delete:
-                        api_delete.delete_api_object(
+                        status_code = api_delete.delete_api_object(
                             jamf_url, "package", target["id"], token, verbosity
                         )
                         if args.smb_url:
@@ -1047,6 +1119,16 @@ def handle_packages(jamf_url, token, args, verbosity):
                             smb_actions.delete_pkg(args.smb_url, target["name"])
                             # unmount the share
                             smb_actions.umount_smb(args.smb_url)
+
+                        if args.slack:
+                            send_slack_notification(
+                                jamf_url,
+                                slack_webhook,
+                                "package",
+                                pkg_name,
+                                "delete",
+                                status_code,
+                            )
                 print(f"{len(targets)} total matches")
                 pathlib.Path(os.path.dirname(csv_write)).mkdir(
                     parents=True, exist_ok=True
@@ -1066,7 +1148,7 @@ def handle_packages(jamf_url, token, args, verbosity):
         exit("ERROR: with --packages you must supply --unused, --search or --all.")
 
 
-def handle_scripts(jamf_url, token, args, verbosity):
+def handle_scripts(jamf_url, token, args, slack_webhook, verbosity):
     """Function for handling scripts"""
     unused_scripts = {}
     used_scripts = {}
@@ -1189,16 +1271,25 @@ def handle_scripts(jamf_url, token, args, verbosity):
                             default=False,
                         ):
                             print(f"Deleting {script_name}...")
-                            api_delete.delete_uapi_object(
+                            status_code = api_delete.delete_uapi_object(
                                 jamf_url, "script", script_id, token, verbosity
                             )
+                            if args.slack:
+                                send_slack_notification(
+                                    jamf_url,
+                                    slack_webhook,
+                                    "script",
+                                    script_name,
+                                    "delete",
+                                    status_code,
+                                )
         else:
             print("\nNo scripts found")
     else:
         exit("ERROR: with --scripts you must supply --unused or --all.")
 
 
-def handle_eas(jamf_url, token, args, verbosity):
+def handle_eas(jamf_url, token, args, slack_webhook, verbosity):
     """Function for handling extension attributes"""
     csv_fields = [
         "ea_id",
@@ -1343,20 +1434,29 @@ def handle_eas(jamf_url, token, args, verbosity):
                             default=False,
                         ):
                             print(f"Deleting {ea_name}...")
-                            api_delete.delete_api_object(
+                            status_code = api_delete.delete_api_object(
                                 jamf_url,
                                 "extension_attribute",
                                 ea_id,
                                 token,
                                 verbosity,
                             )
+                            if args.slack:
+                                send_slack_notification(
+                                    jamf_url,
+                                    slack_webhook,
+                                    "extension_attribute",
+                                    ea_name,
+                                    "delete",
+                                    status_code,
+                                )
         else:
             print("\nNo EAs found")
     else:
         exit("ERROR: with --ea you must supply --unused or --all.")
 
 
-def handle_groups(jamf_url, token, args, verbosity):
+def handle_groups(jamf_url, token, args, slack_webhook, verbosity):
     """Function for handling computer groups"""
     csv_fields = ["group_id", "group_name", "is_smart"]
     csv_data = []
@@ -1558,20 +1658,29 @@ def handle_groups(jamf_url, token, args, verbosity):
                             default=False,
                         ):
                             print(f"Deleting {group_name}...")
-                            api_delete.delete_api_object(
+                            status_code = api_delete.delete_api_object(
                                 jamf_url,
                                 "computer_group",
                                 group_id,
                                 token,
                                 verbosity,
                             )
+                            if args.slack:
+                                send_slack_notification(
+                                    jamf_url,
+                                    slack_webhook,
+                                    "computer_group",
+                                    group_name,
+                                    "delete",
+                                    status_code,
+                                )
         else:
             print("\nNo groups found")
     else:
         exit("ERROR: with --groups you must supply --unused or --all.")
 
 
-def handle_ios_groups(jamf_url, token, args, verbosity):
+def handle_ios_groups(jamf_url, token, args, slack_webhook, verbosity):
     """Function for handling mobile device groups"""
     csv_fields = ["group_id", "group_name", "is_smart"]
     csv_data = []
@@ -1733,13 +1842,22 @@ def handle_ios_groups(jamf_url, token, args, verbosity):
                             default=False,
                         ):
                             print(f"Deleting {group_name}...")
-                            api_delete.delete_api_object(
+                            status_code = api_delete.delete_api_object(
                                 jamf_url,
                                 "mobile_device_group",
                                 group_id,
                                 token,
                                 verbosity,
                             )
+                            if args.slack:
+                                send_slack_notification(
+                                    jamf_url,
+                                    slack_webhook,
+                                    "mobile_device_group",
+                                    group_name,
+                                    "delete",
+                                    status_code,
+                                )
         else:
             print("\nNo groups found")
     else:
@@ -1873,6 +1991,7 @@ def get_args():
     )
     parser.add_argument("--from_csv", help="Delete from CSV file", action="store_true")
     parser.add_argument("--slack", help="Post a slack webhook", action="store_true")
+    parser.add_argument("--slack_webhook", default="", help="the Slack webhook URL")
     parser.add_argument("--url", default="", help="the Jamf Pro Server URL")
     parser.add_argument(
         "--user", default="", help="a user with the rights to delete a policy"
@@ -1984,31 +2103,33 @@ def main():
     # policies
     if args.policies:
         if args.from_csv:
-            handle_policies_from_csv_data(jamf_url, token, args, verbosity)
+            handle_policies_from_csv_data(
+                jamf_url, token, args, slack_webhook, verbosity
+            )
         elif args.category:
-            handle_policies_in_category(jamf_url, token, args, verbosity)
+            handle_policies_in_category(jamf_url, token, args, slack_webhook, verbosity)
         else:
-            handle_policies(jamf_url, token, args, verbosity)
+            handle_policies(jamf_url, token, args, slack_webhook, verbosity)
 
     # packages
     elif args.packages:
-        handle_packages(jamf_url, token, args, verbosity)
+        handle_packages(jamf_url, token, args, slack_webhook, verbosity)
 
     # scripts
     elif args.scripts:
-        handle_scripts(jamf_url, token, args, verbosity)
+        handle_scripts(jamf_url, token, args, slack_webhook, verbosity)
 
     # extension attributes
     elif args.ea:
-        handle_eas(jamf_url, token, args, verbosity)
+        handle_eas(jamf_url, token, args, slack_webhook, verbosity)
 
     # computer groupss
     elif args.macosgroups:
-        handle_groups(jamf_url, token, args, verbosity)
+        handle_groups(jamf_url, token, args, slack_webhook, verbosity)
 
     # mobile device groups
     elif args.iosgroups:
-        handle_ios_groups(jamf_url, token, args, verbosity)
+        handle_ios_groups(jamf_url, token, args, slack_webhook, verbosity)
 
     # computer profiles
     elif args.macosprofiles:
@@ -2032,7 +2153,7 @@ def main():
 
     # process a name or list of names
     if args.names:
-        handle_policy_list(jamf_url, token, args, verbosity)
+        handle_policy_list(jamf_url, token, args, slack_webhook, verbosity)
 
     print()
 
