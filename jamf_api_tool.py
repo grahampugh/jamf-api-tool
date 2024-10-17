@@ -98,6 +98,13 @@ def handle_computers(jamf_url, token, args, slack_webhook, verbosity):
             jamf_url, "computer", x, "", token, verbosity
         )
 
+        macos = "unknown"
+        name = "unknown"
+        dep = "unknown"
+        seen = "unknown"
+        now = "unknown"
+        difference = "unknown"
+
         if obj:
             # this is now computer object
             try:
@@ -110,11 +117,7 @@ def handle_computers(jamf_url, token, args, slack_webhook, verbosity):
                 now = datetime.utcnow()
 
             except IndexError:
-                macos = "unknown"
-                name = "unknown"
-                dep = "unknown"
-                seen = "unknown"
-                now = "unknown"
+                pass
 
             difference = (now - seen).days
 
@@ -218,9 +221,11 @@ def handle_policies(jamf_url, token, args, slack_webhook, verbosity):
     # create more specific output filename
     csv_path = os.path.dirname(args.csv)
     csv_file = os.path.basename(args.csv)
-    if args.all or args.disabled:
+    if args.all or args.disabled or args.unused:
         if args.disabled:
             csv_write = os.path.join(csv_path, "Policies", "Disabled", csv_file)
+        if args.unused:
+            csv_write = os.path.join(csv_path, "Policies", "Unused", csv_file)
         else:
             csv_write = os.path.join(csv_path, "Policies", "All", csv_file)
 
@@ -229,6 +234,7 @@ def handle_policies(jamf_url, token, args, slack_webhook, verbosity):
             print(f"Categories: {categories}")
         if categories:
             disabled_policies = {}
+            unused_policies = {}
             for category in categories:
                 # loop all the categories
                 print(
@@ -249,7 +255,8 @@ def handle_policies(jamf_url, token, args, slack_webhook, verbosity):
                         )
                         # get scope
                         if generic_info["scope"]["all_computers"]:
-                            groups = ["All Computers"]
+                            groups.append("All Computers")
+                            unused = "false"
                         else:
                             g_count = len(generic_info["scope"]["computer_groups"])
                             for g in range(g_count):
@@ -258,8 +265,10 @@ def handle_policies(jamf_url, token, args, slack_webhook, verbosity):
                                         "name"
                                     ]  # noqa: E501
                                 )
-                            # if len(groups) < 1:
-                            #     groups = ["none"]
+                            if len(groups) < 1:
+                                unused = "true"
+                            else:
+                                unused = "false"
                         eg_count = len(
                             generic_info["scope"]["exclusions"][
                                 "computer_groups"
@@ -273,8 +282,6 @@ def handle_policies(jamf_url, token, args, slack_webhook, verbosity):
                                     "name"
                                 ]  # noqa: E501
                             )
-                        # if len(exclusion_groups) < 1:
-                        #     exclusion_groups = ["none"]
                         # get enabled status
                         if generic_info["general"]["enabled"] is True:
                             enabled = "true"
@@ -295,8 +302,16 @@ def handle_policies(jamf_url, token, args, slack_webhook, verbosity):
                                 print(
                                     f"Number of disabled policies: {len(disabled_policies)}"  # noqa: E501
                                 )
+                        if unused == "true":
+                            unused_policies[policy["id"]] = policy["name"]
+                            if verbosity > 1:
+                                print(
+                                    f"Number of unused policies: {len(unused_policies)}"  # noqa: E501
+                                )
                         do_print = 1
                         if args.disabled and enabled == "true":
+                            do_print = 0
+                        if args.unused and unused == "false":
                             do_print = 0
                         if do_print == 1:
                             print(
@@ -330,10 +345,17 @@ def handle_policies(jamf_url, token, args, slack_webhook, verbosity):
                 + Bcolors.ENDC
             )
 
-            if args.disabled and args.delete:
+            id_list = ""
+            if (len(disabled_policies) > 0 or len(unused_policies) > 0) and args.delete:
+                if args.disabled:
+                    policy_type = "disabled"
+                    policies_to_act_on = disabled_policies
+                else:
+                    policy_type = "unused"
+                    policies_to_act_on = unused_policies
                 if actions.confirm(
                     prompt=(
-                        "\nDelete all disabled policies?"
+                        f"\nDelete all {policy_type} policies?"
                         "\n(press n to go on to confirm individually)?"
                     ),
                     default=False,
@@ -344,7 +366,7 @@ def handle_policies(jamf_url, token, args, slack_webhook, verbosity):
 
                 # Enter the IDs of the policies you want to delete
                 if not delete_all:
-                    for policy_id, policy_name in disabled_policies.items():
+                    for policy_id, policy_name in policies_to_act_on.items():
                         print(policy_id, ":", policy_name)
 
                     chosen_ids = input(
@@ -354,7 +376,7 @@ def handle_policies(jamf_url, token, args, slack_webhook, verbosity):
                     id_list = chosen_ids.split()
 
                 # prompt to delete each policy in turn
-                for policy_id, policy_name in disabled_policies.items():
+                for policy_id, policy_name in policies_to_act_on.items():
                     if delete_all or (
                         (policy_id in id_list or not id_list)
                         and actions.confirm(
@@ -485,6 +507,7 @@ def handle_policies_from_csv_data(jamf_url, token, args, slack_webhook, verbosit
         else:
             delete_all = False
 
+        id_list = ""
         # Enter the IDs of the policies you want to delete
         if not delete_all:
             chosen_ids = input(
@@ -591,6 +614,7 @@ def handle_policies_in_category(jamf_url, token, args, slack_webhook, verbosity)
                     )
                     id_list = chosen_ids.split()
 
+                id_list = ""
                 # prompt to delete each package in turn
                 for policy_id, policy_name in policies_in_category.items():
                     if delete_all or (
@@ -676,7 +700,7 @@ def handle_policy_list(jamf_url, token, args, slack_webhook, verbosity):
             print(f"Policy '{policy_name}' not found")
 
 
-def handle_profiles(jamf_url, api_endpoint, token, args, verbosity):
+def handle_profiles(jamf_url, api_endpoint, token, args, slack_webhook, verbosity):
     """Function for handling profiles"""
     # declare the csv data for export
     csv_fields = [
@@ -688,26 +712,29 @@ def handle_profiles(jamf_url, api_endpoint, token, args, verbosity):
         "exclusions",
     ]
     csv_data = []
-    if args.all:
+    if args.all or args.unused:
         profiles = api_get.get_api_obj_list(jamf_url, api_endpoint, token, verbosity)
 
         # create more specific output filename
         csv_path = os.path.dirname(args.csv)
         csv_file = os.path.basename(args.csv)
-        csv_write = os.path.join(csv_path, "Computer Profiles", csv_file)
 
+        if "os_x" in api_endpoint:
+            profile_type = "Computer Profiles"
+        else:
+            profile_type = "Mobile Device Profiles"
+        if args.unused:
+            csv_write = os.path.join(csv_path, profile_type, "Unused", csv_file)
+        else:
+            csv_write = os.path.join(csv_path, profile_type, "All", csv_file)
         if profiles:
+            unused_profiles = {}
             for profile in profiles:
                 # loop all the profiles
                 groups = []
                 exclusion_groups = []
-                print(
-                    Bcolors.WARNING
-                    + f"  profile {profile['id']}\n"
-                    + f"      name     : {profile['name']}"
-                    + Bcolors.ENDC
-                )
-                if args.details:
+                unused = "false"
+                if args.details or args.unused:
                     # gather interesting info for each profile via API
                     results = api_get.get_api_obj_from_id(
                         jamf_url, api_endpoint, profile["id"], token, verbosity
@@ -715,8 +742,6 @@ def handle_profiles(jamf_url, api_endpoint, token, args, verbosity):
                     generic_info = results[api_endpoint]
 
                     category = generic_info["general"]["category"]["name"]
-                    if category and "No category assigned" not in category:
-                        print(f"      category : {category}")
                     try:  # macOS
                         distribution_method = generic_info["general"][
                             "distribution_method"
@@ -725,12 +750,11 @@ def handle_profiles(jamf_url, api_endpoint, token, args, verbosity):
                         distribution_method = generic_info["general"][
                             "deployment_method"
                         ]
-                    if distribution_method:
-                        print("      distribution_method : " f"{distribution_method}")
                     # get scope
                     if args.macosprofiles:
                         if generic_info["scope"]["all_computers"]:
                             groups = ["All Computers"]
+                            unused = "false"
                         else:
                             g_count = len(generic_info["scope"]["computer_groups"])
                             for g in range(g_count):
@@ -739,6 +763,8 @@ def handle_profiles(jamf_url, api_endpoint, token, args, verbosity):
                                         "name"
                                     ]  # noqa: E501
                                 )
+                            if len(groups) < 1:
+                                unused = "true"
                         eg_count = len(
                             generic_info["scope"]["exclusions"][
                                 "computer_groups"
@@ -763,6 +789,8 @@ def handle_profiles(jamf_url, api_endpoint, token, args, verbosity):
                                         "name"
                                     ]  # noqa: E501
                                 )
+                            if len(groups) < 1:
+                                unused = "true"
                         eg_count = len(
                             generic_info["scope"]["exclusions"][
                                 "mobile_device_groups"
@@ -776,19 +804,45 @@ def handle_profiles(jamf_url, api_endpoint, token, args, verbosity):
                                     "name"
                                 ]  # noqa: E501
                             )
+                    if unused == "true":
+                        unused_profiles[profile["id"]] = profile["name"]
+                        if verbosity:
+                            print(
+                                f"Number of unused profiles: {len(unused_profiles)}"  # noqa: E501
+                            )
+                    do_print = 1
+                    if args.unused and unused == "false":
+                        do_print = 0
+                    if do_print == 1:
+                        print(
+                            Bcolors.WARNING
+                            + f"  profile {profile['id']}"
+                            + f"\tname                : {profile['name']}\n"
+                            + Bcolors.ENDC
+                            + f"\t\tcategory            : {category}\n"
+                            + f"\t\tdistribution_method : {distribution_method}\n"
+                            + f"\t\tscope               : {groups}\n"
+                            + f"\t\texclusions          : {exclusion_groups}"
+                        )
 
-                    csv_data.append(
-                        {
-                            "profile_id": profile["id"],
-                            "profile_name": profile["name"],
-                            "category": category,
-                            "distribution_method": distribution_method,
-                            "scope": groups,
-                            "exclusions": exclusion_groups,
-                        }
+                        csv_data.append(
+                            {
+                                "profile_id": profile["id"],
+                                "profile_name": profile["name"],
+                                "category": category,
+                                "distribution_method": distribution_method,
+                                "scope": groups,
+                                "exclusions": exclusion_groups,
+                            }
+                        )
+                else:
+                    print(
+                        Bcolors.WARNING
+                        + f"  profile {profile['id']}\n"
+                        + f"      name     : {profile['name']}"
+                        + Bcolors.ENDC
                     )
-
-            if args.details:
+            if args.details or args.unused:
                 pathlib.Path(os.path.dirname(csv_write)).mkdir(
                     parents=True, exist_ok=True
                 )
@@ -800,10 +854,61 @@ def handle_profiles(jamf_url, api_endpoint, token, args, verbosity):
                     + Bcolors.ENDC
                 )
 
+            id_list = ""
+            if len(unused_profiles) > 0 and args.delete:
+                if actions.confirm(
+                    prompt=(
+                        f"\nDelete all unused {api_endpoint}?"
+                        "\n(press n to go on to confirm individually)?"
+                    ),
+                    default=False,
+                ):
+                    delete_all = True
+                else:
+                    delete_all = False
+
+                # Enter the IDs of the policies you want to delete
+                if not delete_all:
+                    for profile_id, profile_name in unused_profiles.items():
+                        print(profile_id, ":", profile_name)
+
+                    chosen_ids = input(
+                        f"Enter the IDs of the {api_endpoint} you want to delete, "
+                        "or leave blank to go through all: "
+                    )
+                    id_list = chosen_ids.split()
+
+                # prompt to delete each policy in turn
+                for profile_id, profile_name in unused_profiles.items():
+                    if delete_all or (
+                        (profile_id in id_list or not id_list)
+                        and actions.confirm(
+                            prompt=(
+                                Bcolors.OKBLUE
+                                + f"Delete [{profile_id}] {profile_name}?"
+                                + Bcolors.ENDC
+                            ),
+                            default=False,
+                        )
+                    ):
+                        print(f"Deleting {profile_name}...")
+                        status_code = api_delete.delete_api_object(
+                            jamf_url, api_endpoint, profile_id, token, verbosity
+                        )
+                        if args.slack:
+                            send_slack_notification(
+                                jamf_url,
+                                slack_webhook,
+                                api_endpoint,
+                                profile_name,
+                                "delete",
+                                status_code,
+                            )
+
         else:
             print("\nNo profiles found")
     else:
-        exit("ERROR: with --computerprofiles you must supply --all.")
+        exit("ERROR: with --computerprofiles you must supply --all or --unused.")
 
 
 def handle_advancedsearches(jamf_url, api_endpoint, token, args, verbosity):
@@ -879,7 +984,8 @@ def handle_packages(jamf_url, token, args, slack_webhook, verbosity):
     # create more specific output filename
     csv_path = os.path.dirname(args.csv)
     csv_file = os.path.basename(args.csv)
-
+    csv_fields = ""
+    csv_write = ""
     if args.all or args.unused:
         packages = api_get.get_api_obj_list(jamf_url, "package", token, verbosity)
         if packages:
@@ -1955,7 +2061,7 @@ def get_args():
     parser.add_argument(
         "--unused",
         help=(
-            "Must be used with --groups, --packages, --scripts, or --eas. "
+            "Must be used with --policies, --profiles, --groups, --packages, --scripts, or --eas. "
             "Delete available in conjunction with --delete."
         ),
         action="store_true",
@@ -2134,12 +2240,12 @@ def main():
     # computer profiles
     elif args.macosprofiles:
         api_endpoint = "os_x_configuration_profile"
-        handle_profiles(jamf_url, api_endpoint, token, args, verbosity)
+        handle_profiles(jamf_url, api_endpoint, token, args, slack_webhook, verbosity)
 
     # mobile device profiles
     elif args.iosprofiles:
         api_endpoint = "configuration_profile"
-        handle_profiles(jamf_url, api_endpoint, token, args, verbosity)
+        handle_profiles(jamf_url, api_endpoint, token, args, slack_webhook, verbosity)
 
     # adavanced computer searches
     elif args.acs:
