@@ -41,6 +41,7 @@ class Bcolors:
 
 def send_slack_notification(
     jamf_url,
+    jamf_user,
     slack_webhook,
     api_xml_object,
     chosen_api_obj_name,
@@ -50,8 +51,10 @@ def send_slack_notification(
     """Send a Slack notification"""
 
     slack_payload = str(
+        "*jamf-api-tool.py*\n"
         f"*API {api_xml_object} {api_obj_action} action*\n"
-        f"Name: *{chosen_api_obj_name}*\n"
+        f"User: {jamf_user}\n"
+        f"Object Name: *{chosen_api_obj_name}*\n"
         f"Instance: {jamf_url}\n"
         f"HTTP Response: {status_code}"
     )
@@ -185,7 +188,7 @@ def handle_computers(jamf_url, token, args, slack_webhook, verbosity):
             print(Bcolors.FAIL + x + Bcolors.ENDC)
 
     if args.slack:
-        # end a slack api webhook with this number
+        # send a slack api webhook with this number
         score = len(recent_computers) / (len(old_computers) + len(recent_computers))
         score = f"{score:.2%}"
         slack_payload = str(
@@ -395,6 +398,7 @@ def handle_policies(jamf_url, token, args, slack_webhook, verbosity):
                         if args.slack:
                             send_slack_notification(
                                 jamf_url,
+                                args.user,
                                 slack_webhook,
                                 "policy",
                                 policy_name,
@@ -542,6 +546,7 @@ def handle_policies_from_csv_data(jamf_url, token, args, slack_webhook, verbosit
                 if args.slack:
                     send_slack_notification(
                         jamf_url,
+                        args.user,
                         slack_webhook,
                         "policy",
                         policy_name,
@@ -635,6 +640,7 @@ def handle_policies_in_category(jamf_url, token, args, slack_webhook, verbosity)
                         if args.slack:
                             send_slack_notification(
                                 jamf_url,
+                                args.user,
                                 slack_webhook,
                                 "policy",
                                 policy_name,
@@ -690,6 +696,7 @@ def handle_policy_list(jamf_url, token, args, slack_webhook, verbosity):
                 if args.slack:
                     send_slack_notification(
                         jamf_url,
+                        args.user,
                         slack_webhook,
                         "policy",
                         policy_name,
@@ -898,6 +905,7 @@ def handle_profiles(jamf_url, api_endpoint, token, args, slack_webhook, verbosit
                         if args.slack:
                             send_slack_notification(
                                 jamf_url,
+                                args.user,
                                 slack_webhook,
                                 api_endpoint,
                                 profile_name,
@@ -1164,6 +1172,7 @@ def handle_packages(jamf_url, token, args, slack_webhook, verbosity):
                             if args.slack:
                                 send_slack_notification(
                                     jamf_url,
+                                    args.user,
                                     slack_webhook,
                                     "package",
                                     pkg_name,
@@ -1229,6 +1238,7 @@ def handle_packages(jamf_url, token, args, slack_webhook, verbosity):
                         if args.slack:
                             send_slack_notification(
                                 jamf_url,
+                                args.user,
                                 slack_webhook,
                                 "package",
                                 pkg_name,
@@ -1383,6 +1393,7 @@ def handle_scripts(jamf_url, token, args, slack_webhook, verbosity):
                             if args.slack:
                                 send_slack_notification(
                                     jamf_url,
+                                    args.user,
                                     slack_webhook,
                                     "script",
                                     script_name,
@@ -1550,6 +1561,7 @@ def handle_eas(jamf_url, token, args, slack_webhook, verbosity):
                             if args.slack:
                                 send_slack_notification(
                                     jamf_url,
+                                    args.user,
                                     slack_webhook,
                                     "extension_attribute",
                                     ea_name,
@@ -1774,6 +1786,7 @@ def handle_groups(jamf_url, token, args, slack_webhook, verbosity):
                             if args.slack:
                                 send_slack_notification(
                                     jamf_url,
+                                    args.user,
                                     slack_webhook,
                                     "computer_group",
                                     group_name,
@@ -1958,6 +1971,7 @@ def handle_ios_groups(jamf_url, token, args, slack_webhook, verbosity):
                             if args.slack:
                                 send_slack_notification(
                                     jamf_url,
+                                    args.user,
                                     slack_webhook,
                                     "mobile_device_group",
                                     group_name,

@@ -71,6 +71,7 @@ def init_temp_file(prefix="jamf_upload_", suffix=None, directory=None, text=True
 
 def get_credentials(prefs_file):
     """return credentials from a prefs_file"""
+    prefs = ""
     if prefs_file.endswith(".plist"):
         with open(prefs_file, "rb", encoding="utf-8") as pl:
             prefs = plistlib.load(pl)

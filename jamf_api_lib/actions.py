@@ -107,28 +107,3 @@ def confirm(prompt=None, default=False):
         if answer == "q" or answer == "Q":
             print("Quitting as Q selected")
             exit()
-
-
-def mount_smb(mount_share, mount_user, mount_pass, verbosity):
-    """Mount distribution point."""
-    mount_cmd = [
-        "/usr/bin/osascript",
-        "-e",
-        f'mount volume "{mount_share}" as user name "{mount_user}" with password "{mount_pass}"',
-    ]
-    if verbosity > 1:
-        print(f"Mount command:\n{mount_cmd}")
-
-    r = subprocess.check_output(mount_cmd)
-    if verbosity > 1:
-        print(f"Mount command response:\n{r.decode('UTF-8')}")
-
-
-def umount_smb(mount_share):
-    """Unmount distribution point."""
-    path = f"/Volumes{urlparse(mount_share).path}"
-    cmd = ["/usr/sbin/diskutil", "unmount", path]
-    try:
-        subprocess.check_call(cmd)
-    except subprocess.CalledProcessError:
-        print("WARNING! Unmount failed.")
