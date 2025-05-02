@@ -4,7 +4,7 @@
 ** Jamf API Tool: List, search and clean policies and computer objects
 
 Credentials can be supplied from the command line as arguments, or inputted, or
-from an existing PLIST containing values for 
+from an existing PLIST containing values for
 JSS_URL, API_USERNAME and API_PASSWORD,
 for example an AutoPkg preferences file which has been configured for use with
 JSSImporter: ~/Library/Preferences/com.github.autopkg
@@ -216,6 +216,13 @@ def handle_policies(jamf_url, token, args, slack_webhook, verbosity):
         "policy_name",
         "policy_enabled",
         "policy_category",
+        "trigger_checkin",
+        "trigger_login",
+        "trigger_enrollment_complete",
+        "trigger_startup",
+        "trigger_other",
+        "trigger_self_service",
+        "frequency",
         "pkg",
         "scope",
         "exclusions",
@@ -285,11 +292,13 @@ def handle_policies(jamf_url, token, args, slack_webhook, verbosity):
                                     "name"
                                 ]  # noqa: E501
                             )
+
                         # get enabled status
                         if generic_info["general"]["enabled"] is True:
                             enabled = "true"
                         else:
                             enabled = "false"
+
                         # get packages
                         try:
                             pkg = generic_info["package_configuration"]["packages"][0][
@@ -297,6 +306,46 @@ def handle_policies(jamf_url, token, args, slack_webhook, verbosity):
                             ]  # noqa: E501
                         except IndexError:
                             pkg = "none"
+
+                        # get triggers
+                        trigger_checkin = (
+                            True
+                            if generic_info["general"]["trigger_checkin"] is True
+                            else False
+                        )
+                        trigger_login = (
+                            True
+                            if generic_info["general"]["trigger_login"] is True
+                            else False
+                        )
+                        trigger_enrollment_complete = (
+                            True
+                            if generic_info["general"]["trigger_enrollment_complete"]
+                            is True
+                            else False
+                        )
+                        trigger_startup = (
+                            True
+                            if generic_info["general"]["trigger_startup"] is True
+                            else False
+                        )
+                        trigger_other = (
+                            generic_info["general"]["trigger_other"]
+                            if generic_info["general"]["trigger_other"] is not None
+                            else None
+                        )
+                        trigger_self_service = (
+                            True
+                            if generic_info["general"]["trigger"] == "USER_INITIATED"
+                            else False
+                        )
+
+                        # get execution frequency
+                        execution_frequency = (
+                            generic_info["general"]["frequency"]
+                            if generic_info["general"]["frequency"] is not None
+                            else None
+                        )
 
                         # now show all the policies as each category loops
                         if enabled == "false":
@@ -322,10 +371,17 @@ def handle_policies(jamf_url, token, args, slack_webhook, verbosity):
                                 + f"  policy {policy['id']}"
                                 + f"\tname       : {policy['name']}\n"
                                 + Bcolors.ENDC
-                                + f"\t\tenabled    : {enabled}\n"
-                                + f"\t\tpkg        : {pkg}\n"
-                                + f"\t\tscope      : {groups}\n"
-                                + f"\t\texclusions : {exclusion_groups}"
+                                + f"\t\tenabled      : {enabled}\n"
+                                + f"\t\tcheckin      : {str(trigger_checkin)}\n"
+                                + f"\t\tlogin        : {str(trigger_login)}\n"
+                                + f"\t\tenrollment   : {str(trigger_enrollment_complete)}\n"
+                                + f"\t\tstartup      : {str(trigger_startup)}\n"
+                                + f"\t\tother        : {str(trigger_other)}\n"
+                                + f"\t\tselfservice  : {str(trigger_self_service)}\n"
+                                + f"\t\tfrequency    : {str(execution_frequency)}\n"
+                                + f"\t\tpkg          : {pkg}\n"
+                                + f"\t\tscope        : {groups}\n"
+                                + f"\t\texclusions   : {exclusion_groups}"
                             )
                             csv_data.append(
                                 {
@@ -333,6 +389,15 @@ def handle_policies(jamf_url, token, args, slack_webhook, verbosity):
                                     "policy_name": policy["name"],
                                     "policy_category": category["name"],
                                     "policy_enabled": enabled,
+                                    "trigger_checkin": str(trigger_checkin),
+                                    "trigger_login": str(trigger_login),
+                                    "trigger_enrollment_complete": str(
+                                        trigger_enrollment_complete
+                                    ),
+                                    "trigger_startup": str(trigger_startup),
+                                    "trigger_other": str(trigger_other),
+                                    "trigger_self_service": str(trigger_self_service),
+                                    "frequency": str(execution_frequency),
                                     "pkg": pkg,
                                     "scope": groups,
                                     "exclusions": exclusion_groups,
@@ -1576,7 +1641,13 @@ def handle_eas(jamf_url, token, args, slack_webhook, verbosity):
 
 def handle_groups(jamf_url, token, args, slack_webhook, verbosity):
     """Function for handling computer groups"""
-    csv_fields = ["group_id", "group_name", "is_smart"]
+    csv_fields = [
+        "group_id",
+        "group_name",
+        "is_smart",
+        "groups_in_criteria",
+        "groups_excluded_from_criteria",
+    ]
     csv_data = []
     # create more specific output filename
     csv_path = os.path.dirname(args.csv)
@@ -1713,11 +1784,39 @@ def handle_groups(jamf_url, token, args, slack_webhook, verbosity):
 
                         is_smart = generic_info["computer_group"]["is_smart"]
                         print(f"      is smart            : {is_smart}")
+
+                        # look in computer groups for computer groups in the criteria
+                        groups_in_criteria = []
+                        groups_excluded_from_criteria = []
+                        criteria = generic_info["computer_group"]["criteria"]
+                        if criteria:
+                            for criterion in criteria:
+                                if (
+                                    criterion["name"] == "Computer Group"
+                                    and criterion["search_type"] == "member of"
+                                ):
+                                    print(
+                                        f"      criteria group name : {criterion['value']}"
+                                    )
+                                    groups_in_criteria.append(criterion["value"])
+                                elif (
+                                    criterion["name"] == "Computer Group"
+                                    and criterion["search_type"] == "not member of"
+                                ):
+                                    print(
+                                        f"      excluded criteria group name : {criterion['value']}"
+                                    )
+                                    groups_excluded_from_criteria.append(
+                                        criterion["value"]
+                                    )
+                        criteria = generic_info["computer_group"]["criteria"]
                         csv_data.append(
                             {
                                 "group_id": group["id"],
                                 "group_name": group["name"],
                                 "is_smart": is_smart,
+                                "groups_in_criteria": groups_in_criteria,
+                                "groups_excluded_from_criteria": groups_excluded_from_criteria,
                             }
                         )
 
