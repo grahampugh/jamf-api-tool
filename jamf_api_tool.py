@@ -2174,7 +2174,7 @@ def get_args():
     parser.add_argument(
         "--unused",
         help=(
-            "Must be used with --policies, --profiles, --groups, --packages, --scripts, or --eas. "
+            "Must be used with --policies, --profiles, --groups, --packages, --scripts, or --ea. "
             "Delete available in conjunction with --delete."
         ),
         action="store_true",
