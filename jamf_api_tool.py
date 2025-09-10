@@ -357,13 +357,13 @@ def handle_policies(jamf_url, token, args, slack_webhook, verbosity):
                             disabled_policies[policy["id"]] = policy["name"]
                             if verbosity > 1:
                                 print(
-                                    f"Number of disabled policies: {len(disabled_policies)}"  # noqa: E501
+                                    f"Number of disabled policies: {len(disabled_policies)}"
                                 )
                         if unused == "true":
                             unused_policies[policy["id"]] = policy["name"]
                             if verbosity > 1:
                                 print(
-                                    f"Number of unused policies: {len(unused_policies)}"  # noqa: E501
+                                    f"Number of unused policies: {len(unused_policies)}"
                                 )
                         do_print = 1
                         if args.disabled and enabled == "true":
@@ -592,15 +592,11 @@ def handle_policies(jamf_url, token, args, slack_webhook, verbosity):
 def handle_policies_from_csv_data(jamf_url, token, args, slack_webhook, verbosity):
     """Function for deleting policies based on IDs in a CSV"""
     # import csv
-    # create more specific output filename
-    csv_path = os.path.dirname(args.csv)
-    csv_file = os.path.basename(args.csv)
-    csv_read = os.path.join(csv_path, "Policies", "To Delete", csv_file)
+    csv_read = args.from_csv
 
     print("\nPolicies:\n")
 
     # generate a list of IDs from the csv
-    # with open(csv_read, "r", encoding="utf-8") as csvdata:
     # creating a csv dict reader object
     reader = csv.DictReader(
         open(csv_read, "r", encoding="utf-8"),
@@ -1204,17 +1200,6 @@ def handle_packages(jamf_url, token, args, slack_webhook, verbosity):
                                 "notes": notes,
                             }
                         )
-            if args.details or args.unused:
-                pathlib.Path(os.path.dirname(csv_write)).mkdir(
-                    parents=True, exist_ok=True
-                )
-                api_connect.write_csv_file(csv_write, csv_fields, csv_data)
-                print(
-                    "\n"
-                    + Bcolors.OKGREEN
-                    + f"CSV file written to {csv_write}"
-                    + Bcolors.ENDC
-                )
             if args.unused:
                 print(
                     "\nThe following packages are found in at least one "
@@ -1292,6 +1277,17 @@ def handle_packages(jamf_url, token, args, slack_webhook, verbosity):
                                     "delete",
                                     status_code,
                                 )
+            if args.details or args.unused:
+                pathlib.Path(os.path.dirname(csv_write)).mkdir(
+                    parents=True, exist_ok=True
+                )
+                api_connect.write_csv_file(csv_write, csv_fields, csv_data)
+                print(
+                    "\n"
+                    + Bcolors.OKGREEN
+                    + f"CSV file written to {csv_write}"
+                    + Bcolors.ENDC
+                )
     elif args.search:
         query = args.search
         csv_fields = ["pkg_id", "pkg_name"]
@@ -1416,15 +1412,15 @@ def handle_packages(jamf_url, token, args, slack_webhook, verbosity):
 def handle_packages_from_csv_data(jamf_url, token, args, slack_webhook, verbosity):
     """Function for deleting packages based on IDs in a CSV"""
     # import csv
-    # create more specific output filename
-    csv_path = os.path.dirname(args.csv)
-    csv_file = os.path.basename(args.csv)
-    csv_read = os.path.join(csv_path, "Packages", "To Delete", csv_file)
+    csv_read = args.from_csv
+
+    # check the file exists
+    if not os.path.isfile(csv_read):
+        exit(f"ERROR: CSV file not found: {csv_read}")
 
     print("\nPackages:\n")
 
     # generate a list of IDs from the csv
-    # with open(csv_read, "r", encoding="utf-8") as csvdata:
     # creating a csv dict reader object
     reader = csv.DictReader(
         open(csv_read, "r", encoding="utf-8"),
@@ -1452,7 +1448,8 @@ def handle_packages_from_csv_data(jamf_url, token, args, slack_webhook, verbosit
         # Enter the IDs of the packages you want to delete
         if not delete_all:
             chosen_ids = input(
-                "Enter the IDs of the packages you want to delete or leave blank to go through all: "
+                "Enter the IDs of the packages you want to delete or "
+                "leave blank to go through all: "
             )
             id_list = chosen_ids.split()
 
@@ -2309,9 +2306,7 @@ def get_args():
         action="append",
         dest="names",
         default=[],
-        help=(
-            "Give a policy name to delete. " "Requires --policies. " "Multiple allowed."
-        ),
+        help=("Give a policy name to delete. Requires --policies. Multiple allowed."),
     )
     parser.add_argument(
         "--os",
@@ -2373,17 +2368,19 @@ def get_args():
             "Path to a directory and filename to output CSVs to. Note that subdirectories will be created."
         ),
     )
-    parser.add_argument("--from_csv", help="Delete from CSV file", action="store_true")
+    parser.add_argument(
+        "--from_csv", default="", help="Path to a CSV containing items to delete"
+    )
     parser.add_argument("--slack", help="Post a slack webhook", action="store_true")
     parser.add_argument("--slack_webhook", default="", help="the Slack webhook URL")
     parser.add_argument("--url", default="", help="the Jamf Pro Server URL")
     parser.add_argument(
-        "--user", default="", help="a user with the rights to delete a policy"
+        "--user", default="", help="a user with the rights to perform the action"
     )
     parser.add_argument(
         "--password",
         default="",
-        help="password of the user with the rights to delete a policy",
+        help="password of the user with the rights to perform the action",
     )
     parser.add_argument(
         "--smb_url",
