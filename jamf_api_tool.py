@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-** Jamf API Tool: List, search and clean policies and computer objects
+** Jamf API Tool: List, search and clean policies, packages, and other objects
 
 Credentials can be supplied from the command line as arguments, or inputted, or
 from an existing PLIST containing values for
@@ -72,25 +72,30 @@ def handle_computers(jamf_url, token, args, slack_webhook, verbosity):
     """Function for handling computer lists"""
     if args.search and args.all:
         exit("syntax error: use either --search or --all, but not both")
-    if not args.all:
-        exit("syntax error: --computers requires --all as a minimum")
+    if not args.all and not args.search:
+        exit("syntax error: --computers requires --all or --search as a minimum")
 
     recent_computers = []  # we'll need this later
     old_computers = []
     warning = []  # stores full detailed computer info
     compliant = []
 
-    if args.all:
+    if args.all or args.search:
         # fill up computers
         obj = api_get.get_api_obj_list(jamf_url, "computer", token, verbosity)
 
         try:
             computers = []
             for x in obj:
-                computers.append(x["id"])
+                if args.search:
+                    for partial in args.search:
+                        if partial in x["name"]:
+                            computers.append(x["id"])
+                else:
+                    computers.append(x["id"])
 
         except IndexError:
-            computers = "404 computers not found"
+            computers = "No computers found"
 
         print(f"{len(computers)} computers found on {jamf_url}")
 
@@ -157,7 +162,7 @@ def handle_computers(jamf_url, token, args, slack_webhook, verbosity):
                 )
 
         except IndexError:
-            print("checkin calc. error")
+            print("check-in calc. error")
 
             # recent_computers.remove(f"{macos} {name} dep:{dep} seen:{calc}")
 
@@ -372,7 +377,7 @@ def handle_policies(jamf_url, token, args, slack_webhook, verbosity):
                                 + f"\tname       : {policy['name']}\n"
                                 + Bcolors.ENDC
                                 + f"\t\tenabled      : {enabled}\n"
-                                + f"\t\tcheckin      : {str(trigger_checkin)}\n"
+                                + f"\t\tcheck-in     : {str(trigger_checkin)}\n"
                                 + f"\t\tlogin        : {str(trigger_login)}\n"
                                 + f"\t\tenrollment   : {str(trigger_enrollment_complete)}\n"
                                 + f"\t\tstartup      : {str(trigger_startup)}\n"
@@ -493,8 +498,7 @@ def handle_policies(jamf_url, token, args, slack_webhook, verbosity):
             print(
                 f"Searching {len(policies)} policy/ies on {jamf_url}:\n"
                 "To delete policies, obtain a matching query, "
-                "then run with the "
-                "--delete argument"
+                "then run with the --delete argument"
             )
 
             for x in query:
@@ -528,10 +532,54 @@ def handle_policies(jamf_url, token, args, slack_webhook, verbosity):
                         + f"CSV file written to {csv_write}"
                         + Bcolors.ENDC
                     )
-                    if args.delete:
-                        api_delete.delete_api_object(
-                            jamf_url, "policy", target["id"], token, verbosity
+                if args.delete:
+                    if actions.confirm(
+                        prompt=(
+                            "\nDelete all matching policies?"
+                            "\n(press n to go on to confirm individually)?"
+                        ),
+                        default=False,
+                    ):
+                        delete_all = True
+                    else:
+                        delete_all = False
+
+                    # Enter the IDs of the policies you want to delete
+                    if not delete_all:
+                        chosen_ids = input(
+                            "Enter the IDs of the policies you want to delete, "
+                            "or leave blank to go through all: "
                         )
+                        id_list = chosen_ids.split()
+
+                    # prompt to delete each policy in turn
+                    for target in targets:
+                        if delete_all or (
+                            (target["id"] in id_list or not id_list)
+                            and actions.confirm(
+                                prompt=(
+                                    Bcolors.OKBLUE
+                                    + f"Delete [{target['id']}] {target['name']}?"
+                                    + Bcolors.ENDC
+                                ),
+                                default=False,
+                            )
+                        ):
+                            print(f"Deleting {target['name']}...")
+                            status_code = api_delete.delete_api_object(
+                                jamf_url, "policy", target["id"], token, verbosity
+                            )
+                            if args.slack:
+                                send_slack_notification(
+                                    jamf_url,
+                                    args.user,
+                                    slack_webhook,
+                                    "policy",
+                                    target["name"],
+                                    "delete",
+                                    status_code,
+                                )
+
                 print(f"{len(targets)} total matches")
             else:
                 for partial in query:
@@ -1027,9 +1075,9 @@ def handle_advancedsearches(jamf_url, api_endpoint, token, args, verbosity):
                 )
 
         else:
-            print("\nNo profiles found")
+            print("\nNo advanced computer searches found")
     else:
-        exit("ERROR: with --computerprofiles you must supply --all.")
+        exit("ERROR: with --acs you must supply --all.")
 
 
 def handle_packages(jamf_url, token, args, slack_webhook, verbosity):
@@ -1255,12 +1303,12 @@ def handle_packages(jamf_url, token, args, slack_webhook, verbosity):
         if packages:
             # targets is the new list
             targets = []
-            print(
-                f"Searching {len(packages)} packages on {jamf_url}:\n"
-                "To delete packages, obtain a matching query, "
-                "then run with the "
-                "--delete argument"
-            )
+            print(f"Searching {len(packages)} packages on {jamf_url}:\n")
+            if not args.delete:
+                print(
+                    "To delete packages, obtain a matching query, "
+                    "then run with the --delete argument"
+                )
 
             for x in query:
                 for pkg in packages:
@@ -1273,8 +1321,8 @@ def handle_packages(jamf_url, token, args, slack_webhook, verbosity):
                 for target in targets:
                     print(
                         Bcolors.WARNING
-                        + f"- package {target['id']}"
-                        + f"\tname  : {target['name']}"
+                        + f"  package {target['id']}\n"
+                        + f"      name     : {target['name']}"
                         + Bcolors.ENDC
                     )
                     csv_data.append(
@@ -1283,33 +1331,69 @@ def handle_packages(jamf_url, token, args, slack_webhook, verbosity):
                             "pkg_name": target["name"],
                         }
                     )
-                    if args.delete:
-                        status_code = api_delete.delete_api_object(
-                            jamf_url, "package", target["id"], token, verbosity
-                        )
-                        if args.smb_url:
-                            # mount the share
-                            smb_actions.mount_smb(
-                                args.smb_url,
-                                args.smb_user,
-                                args.smb_pass,
-                                verbosity,
-                            )
-                            # delete the file from the share
-                            smb_actions.delete_pkg(args.smb_url, target["name"])
-                            # unmount the share
-                            smb_actions.umount_smb(args.smb_url)
+                if args.delete:
+                    if actions.confirm(
+                        prompt=(
+                            "\nDelete all found packages?"
+                            "\n(press n to go on to confirm individually)?"
+                        ),
+                        default=False,
+                    ):
+                        delete_all = True
+                    else:
+                        delete_all = False
 
-                        if args.slack:
-                            send_slack_notification(
-                                jamf_url,
-                                args.user,
-                                slack_webhook,
-                                "package",
-                                pkg_name,
-                                "delete",
-                                status_code,
+                    # Enter the IDs of the policies you want to delete
+                    id_list = ()
+                    if not delete_all:
+                        chosen_ids = input(
+                            "Enter the IDs of the packages you want to delete, "
+                            "or leave blank to go through all: "
+                        )
+                        id_list = chosen_ids.split()
+
+                    for target in targets:
+                        # prompt to delete each package in turn
+                        if delete_all or (
+                            (target["id"] in id_list or not id_list)
+                            and actions.confirm(
+                                prompt=(
+                                    Bcolors.OKBLUE
+                                    + f"Delete [{target['id']}] {target['name']}?"
+                                    + Bcolors.ENDC
+                                ),
+                                default=False,
                             )
+                        ):
+                            print(f"Deleting {target['name']}...")
+                            status_code = api_delete.delete_api_object(
+                                jamf_url, "package", target["id"], token, verbosity
+                            )
+                            # process for SMB shares if defined
+                            if args.smb_url:
+                                # mount the share
+                                smb_actions.mount_smb(
+                                    args.smb_url,
+                                    args.smb_user,
+                                    args.smb_pass,
+                                    verbosity,
+                                )
+                                # delete the file from the share
+                                smb_actions.delete_pkg(args.smb_url, target["name"])
+                                # unmount the share
+                                smb_actions.umount_smb(args.smb_url)
+
+                            if args.slack:
+                                send_slack_notification(
+                                    jamf_url,
+                                    args.user,
+                                    slack_webhook,
+                                    "package",
+                                    target["name"],
+                                    "delete",
+                                    status_code,
+                                )
+
                 print(f"{len(targets)} total matches")
                 pathlib.Path(os.path.dirname(csv_write)).mkdir(
                     parents=True, exist_ok=True
@@ -1327,6 +1411,85 @@ def handle_packages(jamf_url, token, args, slack_webhook, verbosity):
 
     else:
         exit("ERROR: with --packages you must supply --unused, --search or --all.")
+
+
+def handle_packages_from_csv_data(jamf_url, token, args, slack_webhook, verbosity):
+    """Function for deleting packages based on IDs in a CSV"""
+    # import csv
+    # create more specific output filename
+    csv_path = os.path.dirname(args.csv)
+    csv_file = os.path.basename(args.csv)
+    csv_read = os.path.join(csv_path, "Packages", "To Delete", csv_file)
+
+    print("\nPackages:\n")
+
+    # generate a list of IDs from the csv
+    # with open(csv_read, "r", encoding="utf-8") as csvdata:
+    # creating a csv dict reader object
+    reader = csv.DictReader(
+        open(csv_read, "r", encoding="utf-8"),
+        delimiter=";",
+    )
+    for row in reader:
+        pkg_id = row["pkg_id"]
+        pkg_name = row["pkg_name"]
+        print(f"[{pkg_id}] - {pkg_name}")
+
+    # confirm All or per item
+    if args.delete:
+        if actions.confirm(
+            prompt=(
+                "\nDelete all listed packages?"
+                "\n(press n to go on to confirm individually)?"
+            ),
+            default=False,
+        ):
+            delete_all = True
+        else:
+            delete_all = False
+
+        id_list = ""
+        # Enter the IDs of the packages you want to delete
+        if not delete_all:
+            chosen_ids = input(
+                "Enter the IDs of the packages you want to delete or leave blank to go through all: "
+            )
+            id_list = chosen_ids.split()
+
+        # prompt to delete each package in turn
+        reader = csv.DictReader(
+            open(csv_read, "r", encoding="utf-8"),
+            delimiter=";",
+        )
+        for row in reader:
+            pkg_id = row["pkg_id"]
+            pkg_name = row["pkg_name"]
+            if delete_all or (
+                (pkg_id in id_list or not id_list)
+                and actions.confirm(
+                    prompt=(
+                        Bcolors.OKBLUE
+                        + f"Delete [{pkg_id}] - {pkg_name}?"
+                        + Bcolors.ENDC
+                    ),
+                    default=False,
+                )
+            ):
+                print(f"Deleting {pkg_name}...")
+                status_code = api_delete.delete_api_object(
+                    jamf_url, "package", pkg_id, token, verbosity
+                )
+
+                if args.slack:
+                    send_slack_notification(
+                        jamf_url,
+                        args.user,
+                        slack_webhook,
+                        "package",
+                        pkg_name,
+                        "delete",
+                        status_code,
+                    )
 
 
 def handle_scripts(jamf_url, token, args, slack_webhook, verbosity):
@@ -1849,6 +2012,8 @@ def handle_groups(jamf_url, token, args, slack_webhook, verbosity):
                     "advanced searches\n"
                     "policies, patch policies, Mac App Store apps, "
                     "configuration profiles or restricted software:\n"
+                    "WARNING: this does not check for groups in "
+                    "blueprints or compliance benchmarks\n"
                 )
                 for group_id, group_name in unused_groups.items():
                     print(Bcolors.FAIL + f"[{group_id}] " + group_name + Bcolors.ENDC)
@@ -2332,7 +2497,12 @@ def main():
 
     # packages
     elif args.packages:
-        handle_packages(jamf_url, token, args, slack_webhook, verbosity)
+        if args.from_csv:
+            handle_packages_from_csv_data(
+                jamf_url, token, args, slack_webhook, verbosity
+            )
+        else:
+            handle_packages(jamf_url, token, args, slack_webhook, verbosity)
 
     # scripts
     elif args.scripts:
