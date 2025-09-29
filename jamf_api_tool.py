@@ -1501,17 +1501,6 @@ def handle_packages_from_csv_data(jamf_url, token, args, slack_webhook, verbosit
                         status_code,
                     )
 
-                if args.slack:
-                    send_slack_notification(
-                        jamf_url,
-                        args.user,
-                        slack_webhook,
-                        "package",
-                        pkg_name,
-                        "delete",
-                        status_code,
-                    )
-
 
 def handle_scripts(jamf_url, token, args, slack_webhook, verbosity):
     """Function for handling scripts"""
