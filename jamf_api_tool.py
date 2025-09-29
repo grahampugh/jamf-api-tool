@@ -1476,6 +1476,30 @@ def handle_packages_from_csv_data(jamf_url, token, args, slack_webhook, verbosit
                 status_code = api_delete.delete_api_object(
                     jamf_url, "package", pkg_id, token, verbosity
                 )
+                # process for SMB shares if defined
+                if args.smb_url:
+                    # mount the share
+                    smb_actions.mount_smb(
+                        args.smb_url,
+                        args.smb_user,
+                        args.smb_pass,
+                        verbosity,
+                    )
+                    # delete the file from the share
+                    smb_actions.delete_pkg(args.smb_url, pkg_name)
+                    # unmount the share
+                    smb_actions.umount_smb(args.smb_url)
+
+                if args.slack:
+                    send_slack_notification(
+                        jamf_url,
+                        args.user,
+                        slack_webhook,
+                        "package",
+                        pkg_name,
+                        "delete",
+                        status_code,
+                    )
 
                 if args.slack:
                     send_slack_notification(
