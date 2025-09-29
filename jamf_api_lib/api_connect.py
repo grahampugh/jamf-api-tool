@@ -42,8 +42,8 @@ def write_temp_file(data):
 def write_csv_file(file, fields, data):
     """dump some text to a file"""
     with open(file, "w", encoding="utf-8") as csvfile:
-        # creating a csv dict writer object
-        writer = csv.DictWriter(csvfile, fieldnames=fields)
+        # creating a csv dict writer object with ; as the delimiter
+        writer = csv.DictWriter(csvfile, fieldnames=fields, delimiter=";")
 
         # writing headers (field names)
         writer.writeheader()
